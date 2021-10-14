@@ -25,7 +25,6 @@
    PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
    MODIFICATIONS.
 */
-#define Test test
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
