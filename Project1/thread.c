@@ -183,7 +183,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  
+  
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -237,7 +238,7 @@ thread_block (void)
    it may expect that it can atomically unblock a thread and
    update other data. */
 void
-thread_unblock (struct thread *t) 
+thread_unblock (struct thread *t) /*将线程添加至就绪队列里运行*/
 {
   enum intr_level old_level;
 
@@ -338,7 +339,16 @@ thread_foreach (thread_action_func *func, void *aux)
       func (t, aux);
     }
 }
-
+void
+check_thread(struct thread *t, void *aux UNUSED)
+{
+  if (t->status == THREAD_BLOCKED && t->ticks_blocked > 0)
+  {
+  	t->blocked_ticks_num--;
+  	if(t->ticks_blocked == 0)
+  	  thread_unblock(t);
+  }
+}
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
@@ -469,6 +479,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->blocked_ticks_num = 0;
   list_push_back (&all_list, &t->allelem);
 }
 

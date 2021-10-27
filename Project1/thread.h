@@ -89,7 +89,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-
+	long long blocked_ticks_num;		/* 记录线程阻塞时间 */ 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -138,4 +138,5 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void check_thread(struct thread *t, void *aux UNUSED);/*检查线程阻塞状态*/
 #endif /* threads/thread.h */
