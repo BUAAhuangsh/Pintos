@@ -342,10 +342,10 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 check_thread(struct thread *t, void *aux UNUSED)
 {
-  if (t->status == THREAD_BLOCKED && t->ticks_blocked > 0)
+  if (t->status == THREAD_BLOCKED && t->blocked_ticks_num > 0)
   {
   	t->blocked_ticks_num--;
-  	if(t->ticks_blocked == 0)
+  	if(t-block_ticks_num == 0)
   	  thread_unblock(t);
   }
 }
