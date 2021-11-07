@@ -100,6 +100,11 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    //update
+    int base_priority;                  /* Base priority. */
+    struct list locks;                  /* Locks that the thread is holding. */
+    struct lock *lock_waiting;          /* The lock that the thread is waiting for. */
+    //
   };
 
 /* If false (default), use round-robin scheduler.
@@ -107,7 +112,15 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+void thread_donate_priority (struct thread *t);
+void thread_update_priority (struct thread *t);
+void thread_hold_the_lock(struct lock *lock);
+void thread_remove_lock (struct lock *lock);
+
+
+bool lock_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
 void thread_init (void);
 void thread_start (void);
 
