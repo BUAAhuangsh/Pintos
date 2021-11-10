@@ -84,13 +84,6 @@ static tid_t allocate_tid (void);
 
    It is not safe to call thread_current() until this function
    finishes. */
-
-bool
-thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
-    return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
-}
-
 void
 thread_init (void) 
 {
@@ -245,7 +238,7 @@ thread_block (void)
    it may expect that it can atomically unblock a thread and
    update other data. */
 void
-thread_unblock (struct thread *t) /*锟斤拷锟竭筹拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷*/
+thread_unblock (struct thread *t) /*将线程添加至就绪队列里运行*/
 {
   enum intr_level old_level;
 
@@ -253,8 +246,7 @@ thread_unblock (struct thread *t) /*锟斤拷锟竭筹拷锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  /*淇敼杩涢槦鏂瑰紡*/
-  list_insert_ordered (&ready_list, &t->elem, (list_less_func *) &thread_cmp_priority, NULL);
+  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -325,8 +317,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, (list_less_func *) &thread_cmp_priority, NULL);
-  cur->status = THREAD_READY;
+    list_push_back (&ready_list, &cur->elem);
+  cur->status = THREAD_R
+  EADY;
   schedule ();
   intr_set_level (old_level);
 }
@@ -353,7 +346,7 @@ check_thread(struct thread *t, void *aux UNUSED)
   if (t->status == THREAD_BLOCKED && t->blocked_ticks_num > 0)
   {
   	t->blocked_ticks_num--;
-  	if(t->blocked_ticks_num == 0)
+  	if(t-block_ticks_num == 0)
   	  thread_unblock(t);
   }
 }
@@ -488,8 +481,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->blocked_ticks_num = 0;
-  /**/
-  list_insert_ordered (&all_list, &t->allelem, (list_less_func *) &thread_cmp_priority, NULL);
+  list_push_back (&all_list, &t->allelem);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -600,6 +592,13 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+void set_blocked_thread_status(){
+  enum intr_level old_level = intr_disable ();/*禁止当前行为被中断，保存之前的中断状态*/
+  struct thread *current_thread = thread_current ();
+  current_thread->blocked_ticks_num = ticks;
+  thread_block ();/*阻塞当前线程*/
+  intr_set_level (old_level);/*根据之前的中断状态设置新的中断状态*/ 
 }
 
 /* Offset of `stack' member within `struct thread'.

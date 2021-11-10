@@ -88,17 +88,13 @@ timer_elapsed (int64_t then)
    be turned on. */
 void
 timer_sleep (int64_t ticks) 
+
 {
 //  int64_t start = timer_ticks ();
 
   if(ticks <= 0) return; 
   ASSERT (intr_get_level () == INTR_ON);
-  
-  enum intr_level old_level = intr_disable ();/*禁止当前行为被中断，保存之前的中断状态*/
-  struct thread *current_thread = thread_current ();
-  current_thread->blocked_ticks_num = ticks;
-  thread_block ();/*阻塞当前线程*/
-  intr_set_level (old_level);/*根据之前的中断状态设置新的中断状态*/ 
+  void set_blocked_thread_status();
   
 //  while (timer_elapsed (start) < ticks) 
 //    thread_yield ();
