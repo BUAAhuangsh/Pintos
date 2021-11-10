@@ -89,7 +89,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-	long long blocked_ticks_num;		/* ï¿½ï¿½Â¼ï¿½ß³ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ */ 
+	long long blocked_ticks_num;		/* ¼ÇÂ¼Ïß³Ì×èÈûÊ±¼ä */ 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -107,7 +107,6 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void thread_init (void);
 void thread_start (void);
 
@@ -139,5 +138,6 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-void check_thread(struct thread *t, void *aux UNUSED);/*ï¿½ï¿½ï¿½ï¿½ß³ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬*/
+void check_thread(struct thread *t, void *aux UNUSED);/*¼ì²éÏß³Ì×èÈû×´Ì¬*/
+void set_blocked_thread_status();
 #endif /* threads/thread.h */
