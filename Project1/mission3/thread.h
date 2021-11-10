@@ -17,7 +17,7 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
-typedef int fixed_t;
+typedef int qf;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -85,7 +85,7 @@ struct thread
   {
     /* Owned by thread.c. */
     int nice;
-    fixed_t recent_cpu;
+    qf recent_cpu;
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
@@ -154,10 +154,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-void mlfqs_increase_recent_cpu_by_one (void);
-void mlfqs_update_load_avg_and_recent_cpu (void);
-void mlfqs_update_priority (struct thread *t);
 
 void check_thread(struct thread *t, void *aux UNUSED);/*����߳�����״̬*/
 #endif /* threads/thread.h */
