@@ -115,11 +115,9 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-void thread_donate_priority (struct thread *t);
-void thread_update_priority (struct thread *t);
-void thread_hold_the_lock(struct lock *lock);
-void thread_remove_lock (struct lock *lock);
-
+void t_update_priority (struct thread *t);
+void t_donate_priority (struct thread *t);
+void priority_update (struct thread *t);
 
 bool lock_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
