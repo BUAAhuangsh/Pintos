@@ -139,5 +139,5 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void check_thread(struct thread *t, void *aux UNUSED);/*¼ì²éÏß³Ì×èÈû×´Ì¬*/
-void set_blocked_thread_status();
+void set_blocked_thread_status(long long ticks);
 #endif /* threads/thread.h */

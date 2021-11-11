@@ -94,7 +94,7 @@ timer_sleep (int64_t ticks)
 
   if(ticks <= 0) return; 
   ASSERT (intr_get_level () == INTR_ON);
-  void set_blocked_thread_status();
+  void set_blocked_thread_status(ticks);
   
 //  while (timer_elapsed (start) < ticks) 
 //    thread_yield ();

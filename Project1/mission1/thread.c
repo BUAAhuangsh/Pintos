@@ -593,7 +593,7 @@ allocate_tid (void)
 
   return tid;
 }
-void set_blocked_thread_status(){
+void set_blocked_thread_status(long long ticks){
   enum intr_level old_level = intr_disable ();/*禁止当前行为被中断，保存之前的中断状态*/
   struct thread *current_thread = thread_current ();
   current_thread->blocked_ticks_num = ticks;
