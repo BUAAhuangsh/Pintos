@@ -206,6 +206,7 @@ lock_acquire (struct lock *lock)
 //  lock->holder = thread_current ();
 
   struct thread *current_thread = thread_current ();
+  struct thread *lock_holder = lock->holder;
   struct lock *l;
   enum intr_level old_level;
 
@@ -213,14 +214,14 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  if (lock->holder != NULL && !thread_mlfqs)
+  if (lock_holder != NULL && !thread_mlfqs)
   {
     current_thread->lock_waiting = lock;
     l = lock;
-    while (l && current_thread->priority > l->max_priority)//当前线程的优先级大于锁优先级
+    while (l && current_thread->priority > l->max_priority)
     {
       l->max_priority = current_thread->priority;
-      thread_donate_priority (l->holder);
+      t_donate_priority(l->holder);
       l = l->holder->lock_waiting;
     }
   }
@@ -233,7 +234,12 @@ lock_acquire (struct lock *lock)
   {
     current_thread->lock_waiting = NULL;
     lock->max_priority = current_thread->priority;
-    thread_hold_the_lock (lock);
+    list_insert_ordered (&thread_current ()->locks, &lock->elem, lock_cmp_priority, NULL);
+    if (lock->max_priority > thread_current ()->priority)
+    {
+      thread_current ()->priority = lock->max_priority;
+      thread_yield ();
+    }
   }
   lock->holder = current_thread;
 
@@ -275,8 +281,12 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
    if (!thread_mlfqs)
-       thread_remove_lock (lock);
-
+   {
+     enum intr_level old_level = intr_disable ();
+     list_remove (&lock->elem);
+     t_update_priority (thread_current ());
+     intr_set_level (old_level);
+   }
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }
@@ -316,7 +326,11 @@ cond_sema_cmp_priority (const struct list_elem *a, const struct list_elem *b, vo
 {
   struct semaphore_elem *sa = list_entry (a, struct semaphore_elem, elem);
   struct semaphore_elem *sb = list_entry (b, struct semaphore_elem, elem);
-  return list_entry(list_front(&sa->semaphore.waiters), struct thread, elem)->priority > list_entry(list_front(&sb->semaphore.waiters), struct thread, elem)->priority;
+  struct thread* ta = list_entry(list_front(&sa->semaphore.waiters), struct thread, elem);
+  struct thread* tb = list_entry(list_front(&sb->semaphore.waiters), struct thread, elem);
+  bool ans;
+  ans = ta->priority > tb->priority;
+  return ans;
 }
 
 /* Atomically releases LOCK and waits for COND to be signaled by
@@ -363,8 +377,6 @@ cond_wait (struct condition *cond, struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
-
-
 
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) 
