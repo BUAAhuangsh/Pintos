@@ -90,71 +90,56 @@ static tid_t allocate_tid (void);
 bool
 thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-    return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
+    struct thread* ta = list_entry(a, struct thread, elem);
+    struct thread* tb = list_entry(b, struct thread, elem);
+    return ta->priority > tb->priority;
+// return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
 }
 
 bool
 lock_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-  return list_entry (a, struct lock, elem)->max_priority > list_entry (b, struct lock, elem)->max_priority;
+  struct lock* ta = list_entry (a, struct lock, elem);
+  struct lock* tb = list_entry (b, struct lock, elem);
+  return ta->max_priority > tb->max_priority;
+// return list_entry (a, struct lock, elem)->max_priority > list_entry (b, struct lock, elem)->max_priority;
 }
 
-
-/*hold a lock*/
 void
-thread_hold_the_lock(struct lock *lock)
+t_update_priority (struct thread *T)
 {
   enum intr_level old_level = intr_disable ();
-  list_insert_ordered (&thread_current ()->locks, &lock->elem, lock_cmp_priority, NULL);
+  int max_priority = T->base_priority;
+  int lock_max_priority;
 
-  if (lock->max_priority > thread_current ()->priority)
+  if (list_empty (&T->locks))
   {
-    thread_current ()->priority = lock->max_priority;
-    thread_yield ();
+   T->priority = max_priority;
+  }
+  else
+  {
+    list_sort (&T->locks, lock_cmp_priority, NULL);
+    lock_max_priority = list_entry (list_front (&T->locks), struct lock, elem)->max_priority;
+    if (lock_max_priority > max_priority)
+    {
+     max_priority = lock_max_priority;
+    }
+    T->priority = max_priority;
   }
 
   intr_set_level (old_level);
 }
 
 void
-thread_donate_priority (struct thread *t)
+t_donate_priority (struct thread *T)
 {
   enum intr_level old_level = intr_disable ();
-  thread_update_priority (t);
-
-  if (t->status == THREAD_READY)
-  {
-   list_remove (&t->elem);
-   list_insert_ordered (&ready_list, &t->elem, thread_cmp_priority, NULL);
-  }
-  intr_set_level (old_level);
-}
-
-void
-thread_update_priority (struct thread *t)
-{
-  enum intr_level old_level = intr_disable ();
-  int max_priority = t->base_priority;
-  int lock_priority;
-
-  if (!list_empty (&t->locks))
-  {
-    list_sort (&t->locks, lock_cmp_priority, NULL);
-    lock_priority = list_entry (list_front (&t->locks), struct lock, elem)->max_priority;
-    if (lock_priority > max_priority)
-      max_priority = lock_priority;
-  }
-
-  t->priority = max_priority;
-  intr_set_level (old_level);
-}
-
-void
-thread_remove_lock (struct lock *lock)
-{
-  enum intr_level old_level = intr_disable ();
-  list_remove (&lock->elem);
-  thread_update_priority (thread_current ());
+  t_update_priority (T);
+      if (T->status == THREAD_READY)
+      {
+        list_remove (&T->elem);
+        list_insert_ordered (&ready_list, &T->elem, thread_cmp_priority, NULL);
+      }
   intr_set_level (old_level);
 }
 
@@ -428,28 +413,32 @@ check_thread(struct thread *t, void *aux UNUSED)
   	  thread_unblock(t);
   }
 }
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_mlfqs)
-    return;
-
-  enum intr_level old_level = intr_disable ();
-
-  struct thread *current_thread = thread_current ();
-  int old_priority = current_thread->priority;
-  current_thread->base_priority = new_priority;
-
-  if (list_empty (&current_thread->locks) || new_priority > old_priority)
+  if (!thread_mlfqs)
   {
-    current_thread->priority = new_priority;
-    thread_yield ();
-   }
+    enum intr_level old_level = intr_disable ();
 
-   intr_set_level (old_level);
+    struct thread *current_thread = thread_current ();
+    int old_priority = current_thread->priority;
+    current_thread->base_priority = new_priority;
+
+    if (list_empty (&current_thread->locks) || new_priority > old_priority)
+    {
+      current_thread->priority = new_priority;
+      thread_yield ();
+     }
+
+     intr_set_level (old_level);
+  }
+  else
+  {
+    return;
+  }
 }
-
 
 
 /* Returns the current thread's priority. */
