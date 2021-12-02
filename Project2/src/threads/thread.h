@@ -113,10 +113,10 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    uint32_t *pagedir; 
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-                     /* Page directory. */
+    uint32_t *pagedir;                  /* Page directory. */
 #endif
 
     /* Owned by thread.c. */
