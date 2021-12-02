@@ -8,16 +8,6 @@
 #include <threads/malloc.h>
 #include <threads/palloc.h>
 
-#include "userprog/syscall.h"
-#include <stdio.h>
-#include <syscall-nr.h>
-#include <devices/shutdown.h>
-#include <string.h>
-#include <filesys/file.h>
-#include <devices/input.h>
-#include <threads/malloc.h>
-#include <threads/palloc.h>
-
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "process.h"
@@ -48,13 +38,16 @@ void sys_close(struct intr_frame* f); /* syscall close */
 static void syscall_handler (struct intr_frame *);
 struct thread_file * find_file_id(int fd);
 
+
 void
-syscall_init (void) 
+syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  /* Our implementation for Task2: initialize halt,exit,exec */
   syscalls[SYS_HALT] = &sys_halt;
   syscalls[SYS_EXIT] = &sys_exit;
   syscalls[SYS_EXEC] = &sys_exec;
+  /* Our implementation for Task3: initialize create, remove, open, filesize, read, write, seek, tell, and close */
   syscalls[SYS_WAIT] = &sys_wait;
   syscalls[SYS_CREATE] = &sys_create;
   syscalls[SYS_REMOVE] = &sys_remove;
@@ -65,8 +58,10 @@ syscall_init (void)
   syscalls[SYS_CLOSE] =&sys_close;
   syscalls[SYS_READ] = &sys_read;
   syscalls[SYS_FILESIZE] = &sys_filesize;
+
 }
 
+/* Method in document to handle special situation */
 static int 
 get_user (const uint8_t *uaddr)
 {
@@ -75,6 +70,7 @@ get_user (const uint8_t *uaddr)
   return result;
 }
 
+/* New method to check the address and pages to pass test sc-bad-boundary2, execute */
 void * 
 check_ptr2(const void *vaddr)
 { 
@@ -102,18 +98,9 @@ check_ptr2(const void *vaddr)
   return ptr;
 }
 
-static void
-syscall_handler (struct intr_frame *f UNUSED)
-{
-  int * p = f->esp;
-  check_ptr2 (p + 1);//检查有效性
-  int type = * (int *)f->esp;//记录在栈顶的系统调用类型type
-  if(type <= 0 || type >= max_syscall){
-    exit_special ();//类型错误，退出
-  }
-  syscalls[type](f);//类型正确，查找数组调用对应系统调用并调用执行
-}
 
+/* Our implementation for Task2: halt,exit,exec */
+/* Do sytem halt */
 void 
 sys_halt (struct intr_frame* f)
 {
@@ -152,6 +139,8 @@ sys_wait (struct intr_frame* f)
   *user_ptr++;
   f->eax = process_wait(*user_ptr);
 }
+
+/*Our implementation for Task3: create, remove, open, filesize, read, write, seek, tell, and close */
 
 /* Do sytem create, we need to acquire lock for file operation in the following methods when do file operation */
 void 
