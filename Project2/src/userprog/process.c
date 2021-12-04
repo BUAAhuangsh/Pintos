@@ -18,7 +18,10 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+/*内核启动用户进程的过程
+  1.init.c main()->process_execute()
+  2.process.c->execute()->star_process()
+  */
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void push_argument (void **esp, int argc, int argv[]);
@@ -31,19 +34,20 @@ tid_t
 process_execute (const char *file_name)
 {
   tid_t tid;
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
+
   char *fn_copy = malloc(strlen(file_name)+1);
   char *fn_copy2 = malloc(strlen(file_name)+1);
   strlcpy (fn_copy, file_name, strlen(file_name)+1);
   strlcpy (fn_copy2, file_name, strlen(file_name)+1);
-
+  /*file_name是全局变量，将file_name拷贝为两份，避免在调用caller和load时发生资源上的冲突*/
 
   /* Create a new thread to execute FILE_NAME. */
   char * save_ptr;
-  fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);
+  fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);//strtok_r线程安全，保存了上次切割留下来的saveptr
   tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
-  free (fn_copy2);
+  /* 创建以file_name为名字的新线程，新的子线程执行start_process函数.fn_copy保存在kernel_thread_frame
+  这个结构体的辅助数据aux里  */
+  free (fn_copy2);//释放fn_copy2
 
   if (tid == TID_ERROR){
     free (fn_copy);
@@ -51,13 +55,17 @@ process_execute (const char *file_name)
   }
 
   /* Sema down the parent process, waiting for child */
-  sema_down(&thread_current()->sema);
-  if (!thread_current()->success) return TID_ERROR;
+  sema_down(&thread_current()->sema);//降低父进程信号量，等待子进程结束
+  if (!thread_current()->success) 
+    return TID_ERROR;
 
   return tid;
 }
 /* Our implementation for Task 1:
   Push argument into stack, this method is used in Task 1 Argument Pushing */
+/*传参数也就是压栈
+  必须在用户线程被创建以及初始化之后
+  在main被执行之前完成对应参数的传递*/
 void
 push_argument (void **esp, int argc, int argv[]){
   *esp = (int)*esp & 0xfffffffc;
