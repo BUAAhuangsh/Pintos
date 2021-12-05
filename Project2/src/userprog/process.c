@@ -71,15 +71,16 @@ push_argument (void **esp, int argc, int argv[]){
   *esp = (int)*esp & 0xfffffffc;
   *esp -= 4;
   *(int *) *esp = 0;
+  /*按照argc的大小，将argv压入栈*/
   for (int i = argc - 1; i >= 0; i--)
   {
-    *esp -= 4;
+    *esp -= 4;//入栈后栈指针减4
     *(int *) *esp = argv[i];
   }
   *esp -= 4;
   *(int *) *esp = (int) *esp + 4;
   *esp -= 4;
-  *(int *) *esp = argc;
+  *(int *) *esp = argc;//传入argc
   *esp -= 4;
   *(int *) *esp = 0;
 }
@@ -95,9 +96,11 @@ start_process (void *file_name_)
   bool success;
 
   char *fn_copy=malloc(strlen(file_name)+1);
+  /*file_name的拷贝*/
   strlcpy(fn_copy,file_name,strlen(file_name)+1);
 
   /* Initialize interrupt frame and load executable. */
+  /*初始化中断帧*/
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -105,6 +108,7 @@ start_process (void *file_name_)
 
   char *token, *save_ptr;
   file_name = strtok_r (file_name, " ", &save_ptr);
+  /*调用load函数，判断是否成功load*/
   success = load (file_name, &if_.eip, &if_.esp);
 
   if (success){
@@ -113,10 +117,11 @@ start_process (void *file_name_)
     int argc = 0;
     /* The number of parameters can't be more than 50 in the test case */
     int argv[50];
+    /*token也就是命令行输入的参数分离后得到的包含了argv的数组*/
     for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
       if_.esp -= (strlen(token)+1);
-      memcpy (if_.esp, token, strlen(token)+1);
-      argv[argc++] = (int) if_.esp;
+      memcpy (if_.esp, token, strlen(token)+1);//栈指针退后token的长度，空出token长度的空间用来存放token
+      argv[argc++] = (int) if_.esp;//argv数组的末尾存放栈顶地址，也就是argv的地址
     }
     push_argument (&if_.esp, argc, argv);
     /* Record the exec_status of the parent thread's success and sema up parent's semaphore */
