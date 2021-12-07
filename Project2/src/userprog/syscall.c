@@ -98,46 +98,44 @@ check_ptr2(const void *vaddr)
   return ptr;
 }
 
-
-/* Our implementation for Task2: halt,exit,exec */
-/* Do sytem halt */
+//以下是进程方面的系统调用
+//关闭
 void 
 sys_halt (struct intr_frame* f)
 {
   shutdown_power_off();
 }
 
-/* Do sytem exit */
+//结束当前程序
 void 
 sys_exit (struct intr_frame* f)
 {
-  uint32_t *user_ptr = f->esp;
-  check_ptr2 (user_ptr + 1);
-  *user_ptr++;
-  /* record the exit status of the process */
-  thread_current()->st_exit = *user_ptr;
+  uint32_t *ptr = f->esp;
+  check_ptr2 (ptr + 1);
+  *ptr++;
+  thread_current()->st_exit = *ptr;
   thread_exit ();
 }
 
-/* Do sytem exec */
+//开始另一程序
 void 
 sys_exec (struct intr_frame* f)
 {
-  uint32_t *user_ptr = f->esp;
-  check_ptr2 (user_ptr + 1);
-  check_ptr2 (*(user_ptr + 1));
-  *user_ptr++;
-  f->eax = process_execute((char*)* user_ptr);
+  uint32_t *ptr = f->esp;
+  check_ptr2 (ptr + 1);
+  check_ptr2 (*(ptr + 1));
+  *ptr++;
+  f->eax = process_execute((char*)* ptr);
 }
 
-/* Do sytem wait */
+//等待子进程结束
 void 
 sys_wait (struct intr_frame* f)
 {
-  uint32_t *user_ptr = f->esp;
-  check_ptr2 (user_ptr + 1);
-  *user_ptr++;
-  f->eax = process_wait(*user_ptr);
+  uint32_t *ptr = f->esp;
+  check_ptr2 (ptr + 1);
+  *ptr++;
+  f->eax = process_wait(*ptr);
 }
 
 /*Our implementation for Task3: create, remove, open, filesize, read, write, seek, tell, and close */
