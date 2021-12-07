@@ -19,10 +19,10 @@
 // 系统调用数组的实现
 static void (*syscalls[max_syscall])(struct intr_frame *);
 
-void sys_halt(struct intr_frame* f);
-void sys_exit(struct intr_frame* f);
-void sys_exec(struct intr_frame* f);
-void sys_wait(struct intr_frame* f);
+void sys_halt(struct intr_frame* index);
+void sys_exit(struct intr_frame* index);
+void sys_exec(struct intr_frame* index);
+void sys_wait(struct intr_frame* index);
 void sys_create(struct intr_frame* f); /* syscall create */
 void sys_remove(struct intr_frame* f); /* syscall remove */
 void sys_open(struct intr_frame* f);/* syscall open */
