@@ -19,13 +19,13 @@
 // 系统调用数组的实现
 static void (*syscalls[max_syscall])(struct intr_frame *);
 
-void sys_halt(struct intr_frame* f); /* syscall halt. */
-void sys_exit(struct intr_frame* f); /* syscall exit. */
-void sys_exec(struct intr_frame* f); /* syscall exec. */
+void sys_halt(struct intr_frame* f);
+void sys_exit(struct intr_frame* f);
+void sys_exec(struct intr_frame* f);
+void sys_wait(struct intr_frame* f);
 void sys_create(struct intr_frame* f); /* syscall create */
 void sys_remove(struct intr_frame* f); /* syscall remove */
 void sys_open(struct intr_frame* f);/* syscall open */
-void sys_wait(struct intr_frame* f); /*syscall wait */
 void sys_filesize(struct intr_frame* f);/* syscall filesize */
 void sys_read(struct intr_frame* f);  /* syscall read */
 void sys_write(struct intr_frame* f); /* syscall write */
@@ -152,18 +152,18 @@ exit_special (void)
 //以下是进程方面的系统调用
 
 uint32_t
-zxyA(struct intr_frame* f)
+zxyA(struct intr_frame* index)
 {
-  uint32_t *ptr = f->esp;
+  uint32_t *ptr = index->esp;
   check_ptr2 (ptr + 1);
   *ptr++;
   return *ptr;
 }
 
 uint32_t
-zxyB(struct intr_frame* f)
+zxyB(struct intr_frame* index)
 {
-  uint32_t *ptr = f->esp;
+  uint32_t *ptr = index->esp;
   check_ptr2 (ptr + 1);
   check_ptr2 (*(ptr + 1));
   *ptr++;
@@ -172,31 +172,31 @@ zxyB(struct intr_frame* f)
 
 //关闭
 void 
-sys_halt (struct intr_frame* f)
+sys_halt (struct intr_frame* index)
 {
   shutdown_power_off();
 }
 
 //结束当前程序
 void 
-sys_exit (struct intr_frame* f)
+sys_exit (struct intr_frame* index)
 {
-  thread_current()->st_exit = zxyA(f);
+  thread_current()->st_exit = zxyA(index);
   thread_exit ();
 }
 
 //开始另一程序
 void 
-sys_exec (struct intr_frame* f)
+sys_exec (struct intr_frame* index)
 {
-  f->eax = process_execute((char*)zxyB(f));
+  index->eax = process_execute((char*)zxyB(index));
 }
 
 //等待子进程结束
 void 
-sys_wait (struct intr_frame* f)
+sys_wait (struct intr_frame* index)
 {
-  f->eax = process_wait(zxyA(f));
+  index->eax = process_wait(zxyA(index));
 }
 
 /*Our implementation for Task3: create, remove, open, filesize, read, write, seek, tell, and close */
