@@ -16,15 +16,12 @@
 #include <filesys/filesys.h>
 # define max_syscall 20
 # define USER_VADDR_BOUND (void*) 0x08048000
-/* Our implementation for storing the array of system calls for Task2 and Task3 */
+// 系统调用数组的实现
 static void (*syscalls[max_syscall])(struct intr_frame *);
 
-/* Our implementation for Task2: syscall halt,exec,wait and practice */
 void sys_halt(struct intr_frame* f); /* syscall halt. */
 void sys_exit(struct intr_frame* f); /* syscall exit. */
 void sys_exec(struct intr_frame* f); /* syscall exec. */
-
-/* Our implementation for Task3: syscall create, remove, open, filesize, read, write, seek, tell, and close */
 void sys_create(struct intr_frame* f); /* syscall create */
 void sys_remove(struct intr_frame* f); /* syscall remove */
 void sys_open(struct intr_frame* f);/* syscall open */
@@ -42,12 +39,11 @@ struct thread_file * find_file_id(int fd);
 void
 syscall_init (void)
 {
+  //初始化30号中断，使其指向syscalls_handler
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  /* Our implementation for Task2: initialize halt,exit,exec */
   syscalls[SYS_HALT] = &sys_halt;
   syscalls[SYS_EXIT] = &sys_exit;
   syscalls[SYS_EXEC] = &sys_exec;
-  /* Our implementation for Task3: initialize create, remove, open, filesize, read, write, seek, tell, and close */
   syscalls[SYS_WAIT] = &sys_wait;
   syscalls[SYS_CREATE] = &sys_create;
   syscalls[SYS_REMOVE] = &sys_remove;
@@ -60,8 +56,6 @@ syscall_init (void)
   syscalls[SYS_FILESIZE] = &sys_filesize;
 
 }
-
-/* Method in document to handle special situation */
 static int 
 get_user (const uint8_t *uaddr)
 {
@@ -70,35 +64,92 @@ get_user (const uint8_t *uaddr)
   return result;
 }
 
-/* New method to check the address and pages to pass test sc-bad-boundary2, execute */
 void * 
 check_ptr2(const void *vaddr)
 { 
-  /* Judge address */
+  //确保指针指向用户地址
   if (!is_user_vaddr(vaddr))
   {
-    exit_special ();
+    thread_current()->st_exit = -1;
+    thread_exit ();
   }
-  /* Judge the page */
+  //确保页表不为空
   void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
   if (!ptr)
   {
-    exit_special ();
+    thread_current()->st_exit = -1;
+    thread_exit ();
   }
-  /* Judge the content of page */
+  
   uint8_t *check_byteptr = (uint8_t *) vaddr;
   for (uint8_t i = 0; i < 4; i++) 
   {
     if (get_user(check_byteptr + i) == -1)
     {
-      exit_special ();
+      thread_current()->st_exit = -1;
+      thread_exit ();
     }
   }
 
   return ptr;
 }
 
+/* Smplify the code to maintain the code more efficiently */
+static void
+syscall_handler (struct intr_frame *f UNUSED)
+{
+  int * p = f->esp;
+  //检查第一个参数
+  check_ptr2 (p + 1);
+  //得到系统调用的类型（系统调用号）（int）
+  int type = * (int *)f->esp;
+  if(type <= 0 || type >= max_syscall){
+    thread_current()->st_exit = -1;//将进程的结束状态改为-1
+    thread_exit ();//退出进程
+  }
+  syscalls[type](f);
+}
 
+/* Do system write, Do writing in stdout and write in files */
+void 
+sys_write (struct intr_frame* f)
+{
+  uint32_t *user_ptr = f->esp;
+  check_ptr2 (user_ptr + 7);
+  check_ptr2 (*(user_ptr + 6));
+  *user_ptr++;
+  int temp2 = *user_ptr;
+  const char * buffer = (const char *)*(user_ptr+1);
+  off_t size = *(user_ptr+2);
+  if (temp2 == 1) {
+    /* Use putbuf to do testing */
+    putbuf(buffer,size);
+    f->eax = size;
+  }
+  else
+  {
+    /* Write to Files */
+    struct thread_file * thread_file_temp = find_file_id (*user_ptr);
+    if (thread_file_temp)
+    {
+      acquire_lock_f ();
+      f->eax = file_write (thread_file_temp->file, buffer, size);
+      release_lock_f ();
+    } 
+    else
+    {
+      f->eax = 0;
+    }
+  }
+}
+
+/* Handle the special situation for thread */
+void 
+exit_special (void)
+{
+  thread_current()->st_exit = -1;
+  thread_exit ();
+}
 /* Our implementation for Task2: halt,exit,exec */
 /* Do sytem halt */
 void 
@@ -193,38 +244,7 @@ sys_open (struct intr_frame* f)
     f->eax = -1;
   }
 }
-/* Do system write, Do writing in stdout and write in files */
-void 
-sys_write (struct intr_frame* f)
-{
-  uint32_t *user_ptr = f->esp;
-  check_ptr2 (user_ptr + 7);
-  check_ptr2 (*(user_ptr + 6));
-  *user_ptr++;
-  int temp2 = *user_ptr;
-  const char * buffer = (const char *)*(user_ptr+1);
-  off_t size = *(user_ptr+2);
-  if (temp2 == 1) {
-    /* Use putbuf to do testing */
-    putbuf(buffer,size);
-    f->eax = size;
-  }
-  else
-  {
-    /* Write to Files */
-    struct thread_file * thread_file_temp = find_file_id (*user_ptr);
-    if (thread_file_temp)
-    {
-      acquire_lock_f ();
-      f->eax = file_write (thread_file_temp->file, buffer, size);
-      release_lock_f ();
-    } 
-    else
-    {
-      f->eax = 0;
-    }
-  }
-}
+
 /* Do system seek, by calling the function file_seek() in filesystem */
 void 
 sys_seek(struct intr_frame* f)
@@ -349,13 +369,7 @@ sys_read (struct intr_frame* f)
   }
 }
 
-/* Handle the special situation for thread */
-void 
-exit_special (void)
-{
-  thread_current()->st_exit = -1;
-  thread_exit ();
-}
+
 
 /* Find file by the file's ID */
 struct thread_file * 
@@ -372,16 +386,3 @@ find_file_id (int file_id)
   return false;
 }
 
-/* Smplify the code to maintain the code more efficiently */
-static void
-syscall_handler (struct intr_frame *f UNUSED)
-{
-  /* For Task2 practice, just add 1 to its first argument, and print its result */
-  int * p = f->esp;
-  check_ptr2 (p + 1);
-  int type = * (int *)f->esp;
-  if(type <= 0 || type >= max_syscall){
-    exit_special ();
-  }
-  syscalls[type](f);
-}
