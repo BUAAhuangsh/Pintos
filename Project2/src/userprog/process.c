@@ -158,12 +158,11 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 
-/* Our Implementation
-Modify Process wait to satisfy some special test in Task1 and also some bugs in other Tasks */
+//供syscall.c/sys_wait使用的进程等待函数
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-  /* Find the child's ID that the current thread waits for and sema down the child's semaphore */
+  //找到当前线程等待的子线程，并关闭其信号量
   struct list *l = &thread_current()->childs;
   struct list_elem *temp;
   temp = list_begin (l);
