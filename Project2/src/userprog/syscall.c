@@ -99,6 +99,16 @@ check_ptr2(const void *vaddr)
 }
 
 //以下是进程方面的系统调用
+
+uint32_t
+zxyA(struct intr_frame* f)
+{
+  uint32_t *ptr = f->esp;
+  check_ptr2 (ptr + 1);
+  *ptr++;
+  return *ptr;
+}
+
 //关闭
 void 
 sys_halt (struct intr_frame* f)
@@ -110,10 +120,7 @@ sys_halt (struct intr_frame* f)
 void 
 sys_exit (struct intr_frame* f)
 {
-  uint32_t *ptr = f->esp;
-  check_ptr2 (ptr + 1);
-  *ptr++;
-  thread_current()->st_exit = *ptr;
+  thread_current()->st_exit = zxyA(f);
   thread_exit ();
 }
 
@@ -132,10 +139,7 @@ sys_exec (struct intr_frame* f)
 void 
 sys_wait (struct intr_frame* f)
 {
-  uint32_t *ptr = f->esp;
-  check_ptr2 (ptr + 1);
-  *ptr++;
-  f->eax = process_wait(*ptr);
+  f->eax = process_wait(zxyA(f));
 }
 
 /*Our implementation for Task3: create, remove, open, filesize, read, write, seek, tell, and close */
