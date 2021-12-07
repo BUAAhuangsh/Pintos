@@ -12,7 +12,7 @@
 | ------ | -------- | ------------ |
 | 黄森辉 |          |              |
 | 陈逸然 | 19231005 | aurora-cccyr |
-| 吴浩华 | 19231023 |              |
+| 吴浩华 | 19231023 | async222     |
 | 赵晰莹 | 19231235 | wellmslouis  |
 
 ### 每位组员的主要工作内容
@@ -277,6 +277,12 @@ index->eax = process_execute((char*)(index->esp));
 ```c
 index->eax = process_wait(((int*)index->esp)+1);
 ```
+
+
+
+
+
+
 
 ## 重难点讲解
 
