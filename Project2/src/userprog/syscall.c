@@ -80,7 +80,7 @@ check_ptr2(const void *vaddr)
     thread_current()->st_exit = -1;
     thread_exit ();
   }
-  
+  //检查页表中的每一项
   uint8_t *check_byteptr = (uint8_t *) vaddr;
   for (uint8_t i = 0; i < 4; i++) 
   {
@@ -90,7 +90,6 @@ check_ptr2(const void *vaddr)
       thread_exit ();
     }
   }
-
   return ptr;
 }
 
