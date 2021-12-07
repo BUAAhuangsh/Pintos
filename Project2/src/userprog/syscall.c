@@ -160,6 +160,16 @@ zxyA(struct intr_frame* f)
   return *ptr;
 }
 
+uint32_t
+zxyB(struct intr_frame* f)
+{
+  uint32_t *ptr = f->esp;
+  check_ptr2 (ptr + 1);
+  check_ptr2 (*(ptr + 1));
+  *ptr++;
+  return *ptr;
+}
+
 //关闭
 void 
 sys_halt (struct intr_frame* f)
@@ -179,11 +189,7 @@ sys_exit (struct intr_frame* f)
 void 
 sys_exec (struct intr_frame* f)
 {
-  uint32_t *ptr = f->esp;
-  check_ptr2 (ptr + 1);
-  check_ptr2 (*(ptr + 1));
-  *ptr++;
-  f->eax = process_execute((char*)* ptr);
+  f->eax = process_execute((char*)zxyB(f));
 }
 
 //等待子进程结束
