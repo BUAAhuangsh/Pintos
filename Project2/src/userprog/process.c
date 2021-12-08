@@ -717,37 +717,44 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 
+void
+modifyChild(struct child *c)
+{
+  c->isrun = true;
+  sema_down (&c->sema);
+}
+
+int
+judgeChild(tid_t child_tid,struct child *c)
+{
+  if (c->tid == child_tid){
+      if (!c->isrun){modifyChild(c);return 1;} else return -1;
+    }
+  return 0;
+}
+
 //进程等待函数，特别的，被sys_wait函数调用
 int
 process_wait (tid_t child_tid)
 {
   //找到当前子进程
   struct list *childList = &thread_current()->childs;
-  struct list_elem *indexA;
-  indexA = list_begin (childList);//遍历用途
-  struct child *indexB = NULL;//当前子进程
+  struct list_elem *indexA = list_begin (childList);//遍历用途
+  int a;
+  struct child *indexB;//当前子进程
+  if(indexA != list_end (childList)){a=1;}else{a=0;}
   //找到当前等待的子进程
-  while (indexA != list_end (childList))
-  {
+  while (a){
     indexB = list_entry (indexA, struct child, child_elem);
-    if (indexB->tid == child_tid)//是子进程
-    {
-      if (!indexB->isrun)//如果子进程停止运行，则减少信号量以唤醒父进程
-      {
-        indexB->isrun = true;
-        sema_down (&indexB->sema);
-        break;
-      } 
-      else //子进程仍在运行
-      {
-        return -1;
-      }
-    }
+    int b=judgeChild(child_tid,indexB);
+    if(b)
+      break;
+    else if(b==-1)
+      return b;
     indexA = list_next (indexA);//继续判断下一个
+  if(indexA != list_end (childList)){a=1;}else{a=0;}
   }
-  if (indexA == list_end (childList)) {//循环全部也没有找到子进程
-    return -1;
-  }
+  if (a==0) return -1;
   list_remove (indexA);//删除子进程以给父进程空出位置
   return indexB->store_exit;//返回子进程的返回状态
 }
