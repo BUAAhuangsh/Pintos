@@ -278,6 +278,28 @@ index->eax = process_execute((char*)(index->esp));
 index->eax = process_wait(((int*)index->esp)+1);
 ```
 
+`process_wsit`函数原先已被写好，留待我们补充：
+
+```c
+/* Waits for thread TID to die and returns its exit status.  If
+   it was terminated by the kernel (i.e. killed due to an
+   exception), returns -1.  If TID is invalid or if it was not a
+   child of the calling process, or if process_wait() has already
+   been successfully called for the given TID, returns -1
+   immediately, without waiting.
+
+   This function will be implemented in problem 2-2.  For now, it
+   does nothing. */
+int
+process_wait (tid_t child_tid UNUSED) 
+{
+  return -1;
+}
+```
+
+通过注释我们了解到，这个函数在系统调用部分的作用为等待线程TID结束并返回其退出状态（现在始终返回-1）；如果因异常终止，则返回-1；如果TID无效或不是当前进程的子进程或已调用`process_wait()`，则返回-1.
+
+根据如上注释我们可以实现代码如下：
 
 
 
