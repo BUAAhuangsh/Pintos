@@ -515,6 +515,54 @@ tests/userprog/rox­multichild
 
 > B1: Copy here the declaration of each new or changed `struct` or `struct` member, global or static variable, `typedef`, or enumeration. Identify the purpose of each in 25 words or less.
 
+- <thread.c> 
+
+  - 建立了一个文件锁.
+
+    ```C
+    /*使用文件锁来保证文件操作时的安全性*/
+    static struct lock lock_file;
+    ```
+
+  - 上锁和放锁函数。
+
+    ```c
+    /*获取线程的文件锁*/
+    void acquire_lock_file (){
+     lock_acquire(&lock_file);
+    }
+    /*释放线程的文件锁*/
+    void release_lock_file (){
+     lock_acquire(&lock_file);
+    }
+    ```
+
+
+
+- <thread.h> 
+
+  - 
+
+    ```
+    struct thread_file {
+      int fd;
+      struct file* file;
+      struct list_elem file_elem;
+     };
+    ```
+
+  - struct thread中新增
+
+    ```C
+    struct list files;        /* List of opened files */
+    int file_fd;             /* File's descriptor */
+    struct file * file_owned;     /* The file opened */
+    ```
+
+    
+
+
+
 > B2: Describe how file descriptors are associated with open files. Are file descriptors unique within the entire OS or just within a single process?
 >
 > B2: 描述文件描述符是如何与打开文件相联系的。文件描述符是在整个中唯一还是仅在单个进程中唯一？
