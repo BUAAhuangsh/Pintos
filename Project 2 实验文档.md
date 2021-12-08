@@ -313,31 +313,32 @@ struct list *childList = &thread_current()->childs;
 
 ```c
 struct list_elem *indexA;
-indexA = list_begin (childList);
-struct child *indexB = NULL;
+struct child *indexB;
 ```
 
 在`indexA!=list_end(childList)`时循环遍历该子进程序列，如果当前判断的进程是子进程，则其停止运行，减少信号量以唤醒父进程，否则返回-1，否则`indexA`“++”；
 
 ```c
-if (!indexB->isrun)
-	{
-		indexB->isrun = true;
-        sema_down (&indexB->sema);
-        break;
-	} 
-else
-    return -1;
+void
+modifyChild(struct child *c)
+{
+  c->isrun = true;
+  sema_down (&c->sema);
+}
 ```
-
-如果循环全部也没能找到子进程，则直接返回-1；
 
 ```c
-if (indexA == list_end (childList))
-    return -1;
+int
+judgeChild(tid_t child_tid,struct child *c)
+{
+  if (c->tid == child_tid){
+      if (!c->isrun){modifyChild(c);return 1;} else return -1;
+    }
+  return 0;
+}
 ```
 
-如果中途尚未返回-1，执行至此则说明判断成功，删除子进程以给父进程空出位置，最后返回；
+如果循环全部也没能找到子进程，则直接返回-1；如果中途尚未返回-1，执行至此则说明判断成功，删除子进程以给父进程空出位置，最后返回；
 
 ```c
 list_remove (indexA);
@@ -648,6 +649,10 @@ tests/userprog/rox­multichild
 >
 > B5: 简要描述你"wait"系统调用的实现以及它是如何与进程停止交互的。
 
+**详细可查看“需求分析-系统调用-系统调用_进程中`sys_wait`函数的实现；**
+
+简单而言，遍历所有子进程，对其进行判断，如果是当前进程的子进程还已经运行结束，就退出，返回退出状态；如果是当前进程的子进程但是没运行结束，就接着等待；如果遍历结束也没找到则返回-1。
+
 > B6: Any access to user program memory at a user-specified address can fail due to a bad pointer value. Such accesses must cause the process to be terminated. System calls are fraught with such accesses, e.g. a "write" system call requires reading the system call number from the user stack, then each of the call's three arguments, then an arbitrary amount of user memory, and any of these can fail at any point. This poses a design and error-handling problem: how do you best avoid obscuring the primary function of code in a morass of error-handling? Furthermore, when an error is detected, how do you ensure that all temporarily allocated resources (locks, buffers, etc.) are freed? In a few paragraphs, describe the strategy or strategies you adopted for managing these issues. Give an example.
 >
 > 任何在用户指定的地址上对用户程序的内存的访问可能因为指针错误而失败。此类访问一定导致进程终止。系统调用充满了这样的访问。如一个“写”系统调用需要先从用户栈中读系统调用号，然后每一个调用的 3 个参数，然后是任意数量的用户内存。任何这些都可能造成失败。这构成一个设计错误处理的问题：如何最好地避免混淆主要错误处理的烦恼？此外，当错误被检查到，你如何保证所有的临时开出的资源（锁、缓冲区等）都被释放？用几段话来描述你处理这些问题的策略。
@@ -657,6 +662,8 @@ tests/userprog/rox­multichild
 > B7: The "exec" system call returns -1 if loading the new executable fails, so it cannot return before the new executable has completed loading. How does your code ensure this? How is the load success/failure status passed back to the thread that calls "exec"?
 >
 > B7: 如果新的可执行文件加载失败，"exec"系统调用会返回-1，所以它不能够在该新的可执行文件成功加载之前返回。你的代码是如何保证这一点的？加载成功/失败的状态是如何传递回调用"exec"的线程的？
+
+
 
 > B8: Consider parent process P with child process C. How do you ensure proper synchronization and avoid race conditions when P calls wait(C) before C exits? After C exits? How do you ensure that all resources are freed in each case? How about when P terminates without waiting, before C exits? After C exits? Are there any special cases?
 >
