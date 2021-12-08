@@ -166,10 +166,10 @@ modifyChild(struct child *c)
 }
 
 int
-judgeChild(tid_t child_tid,struct child *indexB)
+judgeChild(tid_t child_tid,struct child *c)
 {
-  if (indexB->tid == child_tid){
-      if (!indexB->isrun){modifyChild(indexB);return 1;} else return -1;
+  if (c->tid == child_tid){
+      if (!c->isrun){modifyChild(c);return 1;} else return -1;
     }
   return 0;
 }

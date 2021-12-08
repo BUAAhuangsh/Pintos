@@ -30,11 +30,11 @@ typedef int tid_t;
 Child process for a parent's process which does fork */
 struct child
   {
-    tid_t tid;                           /* tid of the thread */
-    bool isrun;                          /* whether the child's thread is run successfully */
-    struct list_elem child_elem;         /* list of children */
-    struct semaphore sema;               /* semaphore to control waiting */
-    int store_exit;                      /* the exit status of child thread */
+    tid_t tid;
+    bool isrun;//运行状态
+    struct list_elem child_elem;//子进程列表
+    struct semaphore sema;//控制父进程等待的信号量
+    int store_exit;//退出状态
   };
 
 /* File that the thread open */

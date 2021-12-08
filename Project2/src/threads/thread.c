@@ -200,14 +200,11 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  /* Our implementation */
-  /* Initialize for the thread's child */
+  //子进程初始化
   t->thread_child = malloc(sizeof(struct child));
   t->thread_child->tid = tid;
   sema_init (&t->thread_child->sema, 0);
   list_push_back (&thread_current()->childs, &t->thread_child->child_elem);
-  /* Initialize the  exit status by the MAX
-      Fix Bug */
   t->thread_child->store_exit = UINT32_MAX;
   t->thread_child->isrun = false;
 
