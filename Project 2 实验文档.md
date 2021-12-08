@@ -244,6 +244,8 @@ syscall_handler (struct intr_frame *f)
 }
 ```
 
+#### 系统调用_进程
+
 进程方面的系统调用主要涉及`lib/syscall­nr.h`中前四个服务，对应的我们需要写四个函数：
 
 ```c
@@ -301,7 +303,48 @@ process_wait (tid_t child_tid UNUSED)
 
 根据如上注释我们可以实现代码如下：
 
+首先找到当前子进程序列：
 
+```c
+struct list *childList = &thread_current()->childs;
+```
+
+为遍历该序列定义起始量`indexA`和当前量`indexB`：
+
+```c
+struct list_elem *indexA;
+indexA = list_begin (childList);
+struct child *indexB = NULL;
+```
+
+在`indexA!=list_end(childList)`时循环遍历该子进程序列，如果当前判断的进程是子进程，则其停止运行，减少信号量以唤醒父进程，否则返回-1，否则`indexA`“++”；
+
+```c
+if (!indexB->isrun)
+	{
+		indexB->isrun = true;
+        sema_down (&indexB->sema);
+        break;
+	} 
+else
+    return -1;
+```
+
+如果循环全部也没能找到子进程，则直接返回-1；
+
+```c
+if (indexA == list_end (childList))
+    return -1;
+```
+
+如果中途尚未返回-1，执行至此则说明判断成功，删除子进程以给父进程空出位置，最后返回；
+
+```c
+list_remove (indexA);
+return indexB->store_exit;
+```
+
+#### 系统调用_文件
 
 系统调用中的文件部分，有 create, remove, read, open, filesize, seek, tell, and close这几个函数。
 
