@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -571,6 +572,8 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 =======
+=======
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -591,7 +594,14 @@ install_page (void *upage, void *kpage, bool writable)
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+<<<<<<< HEAD
 
+=======
+/*内核启动用户进程的过程
+  1.init.c main()->process_execute()
+  2.process.c->execute()->star_process()
+  */
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void push_argument (void **esp, int argc, int argv[]);
@@ -604,12 +614,17 @@ tid_t
 process_execute (const char *file_name)
 {
   tid_t tid;
+<<<<<<< HEAD
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
+=======
+
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
   char *fn_copy = malloc(strlen(file_name)+1);
   char *fn_copy2 = malloc(strlen(file_name)+1);
   strlcpy (fn_copy, file_name, strlen(file_name)+1);
   strlcpy (fn_copy2, file_name, strlen(file_name)+1);
+<<<<<<< HEAD
 
 
   /* Create a new thread to execute FILE_NAME. */
@@ -617,6 +632,17 @@ process_execute (const char *file_name)
   fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);
   tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
   free (fn_copy2);
+=======
+  /*file_name是全局变量，将file_name拷贝为两份，避免在调用caller和load时发生资源上的冲突*/
+
+  /* Create a new thread to execute FILE_NAME. */
+  char * save_ptr;
+  fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);//strtok_r线程安全，保存了上次切割留下来的saveptr
+  tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
+  /* 创建以file_name为名字的新线程，新的子线程执行start_process函数.fn_copy保存在kernel_thread_frame
+  这个结构体的辅助数据aux里  */
+  free (fn_copy2);//释放fn_copy2
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
 
   if (tid == TID_ERROR){
     free (fn_copy);
@@ -624,27 +650,50 @@ process_execute (const char *file_name)
   }
 
   /* Sema down the parent process, waiting for child */
+<<<<<<< HEAD
   sema_down(&thread_current()->sema);
   if (!thread_current()->success) return TID_ERROR;
+=======
+  sema_down(&thread_current()->sema);//降低父进程信号量，等待子进程结束
+  if (!thread_current()->success) 
+    return TID_ERROR;
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
 
   return tid;
 }
 /* Our implementation for Task 1:
   Push argument into stack, this method is used in Task 1 Argument Pushing */
+<<<<<<< HEAD
+=======
+/*传参数也就是压栈
+  必须在用户线程被创建以及初始化之后
+  在main被执行之前完成对应参数的传递*/
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
 void
 push_argument (void **esp, int argc, int argv[]){
   *esp = (int)*esp & 0xfffffffc;
   *esp -= 4;
   *(int *) *esp = 0;
+<<<<<<< HEAD
   for (int i = argc - 1; i >= 0; i--)
   {
     *esp -= 4;
+=======
+  /*按照argc的大小，将argv压入栈*/
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    *esp -= 4;//入栈后栈指针减4
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
     *(int *) *esp = argv[i];
   }
   *esp -= 4;
   *(int *) *esp = (int) *esp + 4;
   *esp -= 4;
+<<<<<<< HEAD
   *(int *) *esp = argc;
+=======
+  *(int *) *esp = argc;//传入argc
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
   *esp -= 4;
   *(int *) *esp = 0;
 }
@@ -660,9 +709,17 @@ start_process (void *file_name_)
   bool success;
 
   char *fn_copy=malloc(strlen(file_name)+1);
+<<<<<<< HEAD
   strlcpy(fn_copy,file_name,strlen(file_name)+1);
 
   /* Initialize interrupt frame and load executable. */
+=======
+  /*file_name的拷贝*/
+  strlcpy(fn_copy,file_name,strlen(file_name)+1);
+
+  /* Initialize interrupt frame and load executable. */
+  /*初始化中断帧*/
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -670,6 +727,10 @@ start_process (void *file_name_)
 
   char *token, *save_ptr;
   file_name = strtok_r (file_name, " ", &save_ptr);
+<<<<<<< HEAD
+=======
+  /*调用load函数，判断是否成功load*/
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
   success = load (file_name, &if_.eip, &if_.esp);
 
   if (success){
@@ -678,10 +739,18 @@ start_process (void *file_name_)
     int argc = 0;
     /* The number of parameters can't be more than 50 in the test case */
     int argv[50];
+<<<<<<< HEAD
     for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
       if_.esp -= (strlen(token)+1);
       memcpy (if_.esp, token, strlen(token)+1);
       argv[argc++] = (int) if_.esp;
+=======
+    /*token也就是命令行输入的参数分离后得到的包含了argv的数组*/
+    for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if_.esp -= (strlen(token)+1);
+      memcpy (if_.esp, token, strlen(token)+1);//栈指针退后token的长度，空出token长度的空间用来存放token
+      argv[argc++] = (int) if_.esp;//argv数组的末尾存放栈顶地址，也就是argv的地址
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
     }
     push_argument (&if_.esp, argc, argv);
     /* Record the exec_status of the parent thread's success and sema up parent's semaphore */
@@ -718,6 +787,7 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 
+<<<<<<< HEAD
 /* Our Implementation
 Modify Process wait to satisfy some special test in Task1 and also some bugs in other Tasks */
 int
@@ -751,6 +821,48 @@ process_wait (tid_t child_tid UNUSED)
   }
   list_remove (temp);
   return temp2->store_exit;
+=======
+void
+modifyChild(struct child *c)
+{
+  c->isrun = true;
+  sema_down (&c->sema);
+}
+
+int
+judgeChild(tid_t child_tid,struct child *c)
+{
+  if (c->tid == child_tid){
+      if (!c->isrun){modifyChild(c);return 1;} else return -1;
+    }
+  return 0;
+}
+
+//进程等待函数，特别的，被sys_wait函数调用
+int
+process_wait (tid_t child_tid)
+{
+  //找到当前子进程
+  struct list *childList = &thread_current()->childs;
+  struct list_elem *indexA = list_begin (childList);//遍历用途
+  int a;
+  struct child *indexB;//当前子进程
+  if(indexA != list_end (childList)){a=1;}else{a=0;}
+  //找到当前等待的子进程
+  while (a){
+    indexB = list_entry (indexA, struct child, child_elem);
+    int b=judgeChild(child_tid,indexB);
+    if(b)
+      break;
+    else if(b==-1)
+      return b;
+    indexA = list_next (indexA);//继续判断下一个
+  if(indexA != list_end (childList)){a=1;}else{a=0;}
+  }
+  if (a==0) return -1;
+  list_remove (indexA);//删除子进程以给父进程空出位置
+  return indexB->store_exit;//返回子进程的返回状态
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
 }
 
 /* Free the current process's resources. */
@@ -1129,4 +1241,7 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+<<<<<<< HEAD
 >>>>>>> parent of c24df9b (all 80 test-points passed)
+=======
+>>>>>>> 4e199992b271291ce70f10ec36bb3a45c4ee18d2
