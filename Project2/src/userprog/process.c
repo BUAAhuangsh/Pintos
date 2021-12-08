@@ -158,39 +158,39 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 
-/* Our Implementation
-Modify Process wait to satisfy some special test in Task1 and also some bugs in other Tasks */
+//进程等待函数，特别的，被sys_wait函数调用
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-  /* Find the child's ID that the current thread waits for and sema down the child's semaphore */
-  struct list *l = &thread_current()->childs;
-  struct list_elem *temp;
-  temp = list_begin (l);
-  struct child *temp2 = NULL;
-  while (temp != list_end (l))
+  //找到当前子进程
+  struct list *childList = &thread_current()->childs;
+  struct list_elem *indexA;
+  indexA = list_begin (childList);//遍历用途
+  struct child *indexB = NULL;//当前子进程
+  //找到当前等待的子进程
+  while (indexA != list_end (childList))
   {
-    temp2 = list_entry (temp, struct child, child_elem);
-    if (temp2->tid == child_tid)
+    indexB = list_entry (indexA, struct child, child_elem);
+    if (indexB->tid == child_tid)//是子进程
     {
-      if (!temp2->isrun)
+      if (!indexB->isrun)//如果子进程停止运行，则减少信号量以唤醒父进程
       {
-        temp2->isrun = true;
-        sema_down (&temp2->sema);
+        indexB->isrun = true;
+        sema_down (&indexB->sema);
         break;
       } 
-      else 
+      else //子进程仍在运行
       {
         return -1;
       }
     }
-    temp = list_next (temp);
+    indexA = list_next (indexA);//继续判断下一个
   }
-  if (temp == list_end (l)) {
+  if (indexA == list_end (childList)) {//循环全部也没有找到子进程
     return -1;
   }
-  list_remove (temp);
-  return temp2->store_exit;
+  list_remove (indexA);//删除子进程以给父进程空出位置
+  return indexB->store_exit;//返回子进程的返回状态
 }
 
 /* Free the current process's resources. */
