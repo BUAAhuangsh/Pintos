@@ -123,17 +123,17 @@ start_process (void *file_name_)
       memcpy (if_.esp, token, strlen(token)+1);//栈指针退后token的长度，空出token长度的空间用来存放token
       argv[argc++] = (int) if_.esp;//argv数组的末尾存放栈顶地址，也就是argv的地址
     }
-    push_argument (&if_.esp, argc, argv);//将argv参数数组按argc的大小推入栈
+    push_argument (&if_.esp, argc, argv);
     /* Record the exec_status of the parent thread's success and sema up parent's semaphore */
-    thread_current ()->parent->success = true;//保存父进程的执行状态为成功执行
-    sema_up (&thread_current ()->parent->sema);//提升父进程的信号量
+    thread_current ()->parent->success = true;
+    sema_up (&thread_current ()->parent->sema);
   }
 
   /* If load failed, quit. */
   else{
     /* Record the exec_status of the parent thread's success and sema up parent's semaphore */
-    thread_current ()->parent->success = false;//保存父进程的执行状态为执行失败
-    sema_up (&thread_current ()->parent->sema);//提升父进程的信号量
+    thread_current ()->parent->success = false;
+    sema_up (&thread_current ()->parent->sema);
     thread_exit ();
   }
 
@@ -324,7 +324,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  /*根据传入的file_name打开文件*/
   acquire_lock_f ();
   file = filesys_open (file_name);
   if (file == NULL)
@@ -419,11 +418,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
   release_lock_f();
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
