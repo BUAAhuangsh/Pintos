@@ -281,6 +281,34 @@ index->eax = process_wait(((int*)index->esp)+1);
 
 
 
+系统调用中的文件部分，有 create, remove, read, open, filesize, seek, tell, and close这几个函数。
+
+```c
+void sys_create(struct intr_frame* f); /* syscall create */
+void sys_remove(struct intr_frame* f); /* syscall remove */
+void sys_open(struct intr_frame* f);/* syscall open */
+void sys_filesize(struct intr_frame* f);/* syscall filesize */
+void sys_read(struct intr_frame* f);  /* syscall read */
+void sys_seek(struct intr_frame* f); /* syscall seek */
+void sys_tell(struct intr_frame* f); /* syscall tell */
+void sys_close(struct intr_frame* f); /* syscall close */
+```
+
+`create`
+
+创建一个文件，首先获取命令行参数，包括了文件名，地址。check保证合法性，然后获取文件的锁，调用`filesys_create`创建文件，最后需要释放锁。
+`remove`
+删除一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_remove`删除，释放锁
+`open`
+打开一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_open`打开文件，释放锁。获取当前线程，并且为文件添加一个属于当前线程的文件标识符，放入线程的打开文件的列表中，返回文件的标识符。
+`filesize`
+通过`find_file_id`获取文件标识符。调用`file_length`返回以文件标识符fd指代的文件的大小。
+`seek`
+通过`find_file_id`获取文件标识符，获取文件的锁，根据传入的参数，使用`file_seek`函数把下一个要读入或写入的字节跳转到指定文件的指定位置。
+`tell`
+通过`find_file_id`获取文件标识符，获取文件的锁，根据传入的参数，使用`file_tell`函数把下一个要读入或写入的字节的位置返回。
+`close`
+通过`find_file_id`获取文件标识符，获取文件的锁。如果文件打开，调用`file_close`关闭文件，关闭后，把这个文件从线程的文件list中移除并释放资源。
 
 
 
