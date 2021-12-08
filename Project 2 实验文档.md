@@ -297,18 +297,97 @@ void sys_close(struct intr_frame* f); /* syscall close */
 `create`
 
 创建一个文件，首先获取命令行参数，包括了文件名，地址。check保证合法性，然后获取文件的锁，调用`filesys_create`创建文件，最后需要释放锁。
+
+```c
+bool filesys_create (const char *name, off_t initial_size) 
+{
+ block_sector_t inode_sector = 0;
+ struct dir *dir = dir_open_root ();
+ bool success = (dir != NULL
+​         && free_map_allocate (1, &inode_sector)
+​         && inode_create (inode_sector, initial_size)
+​         && dir_add (dir, name, inode_sector));
+ if (!success && inode_sector != 0) 
+  free_map_release (inode_sector, 1);
+ dir_close (dir);
+ return success;
+}
+```
+
 `remove`
-删除一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_remove`删除，释放锁
+删除一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_remove`删除，释放锁.
+
+```c
+bool filesys_remove (const char *name) 
+{
+ struct dir *dir = dir_open_root ();
+ bool success = dir != NULL && dir_remove (dir, name);
+ dir_close (dir); 
+ return success;
+}
+```
+
 `open`
 打开一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_open`打开文件，释放锁。获取当前线程，并且为文件添加一个属于当前线程的文件标识符，放入线程的打开文件的列表中，返回文件的标识符。
+
+```c
+struct file * filesys_open (const char *name)
+{
+ struct dir *dir = dir_open_root ();
+ struct inode *inode = NULL;
+ if (dir != NULL)
+  dir_lookup (dir, name, &inode);
+ dir_close (dir);
+ return file_open (inode);
+}
+```
+
 `filesize`
 通过`find_file_id`获取文件标识符。调用`file_length`返回以文件标识符fd指代的文件的大小。
+
+```c
+struct thread_file * find_file_id (int file_id)
+{
+ struct list_elem *e;
+ struct thread_file * thread_file_temp = NULL;
+ struct list *files = &thread_current ()->files;
+ for (e = list_begin (files); e != list_end (files); e = list_next (e)){
+  thread_file_temp = list_entry (e, struct thread_file, file_elem);
+  if (file_id == thread_file_temp->fd)
+   return thread_file_temp;
+ }
+ return false;
+}
+```
+
 `seek`
 通过`find_file_id`获取文件标识符，获取文件的锁，根据传入的参数，使用`file_seek`函数把下一个要读入或写入的字节跳转到指定文件的指定位置。
+
 `tell`
 通过`find_file_id`获取文件标识符，获取文件的锁，根据传入的参数，使用`file_tell`函数把下一个要读入或写入的字节的位置返回。
+
 `close`
 通过`find_file_id`获取文件标识符，获取文件的锁。如果文件打开，调用`file_close`关闭文件，关闭后，把这个文件从线程的文件list中移除并释放资源。
+
+```c
+void sys_close (struct intr_frame* f)
+{
+ uint32_t *user_ptr = f->esp;
+ check_ptr2 (user_ptr + 1);
+ *user_ptr++;
+ struct thread_file * opened_file = find_file_id (*user_ptr);
+ if (opened_file)
+ {
+  acquire_lock_f ();
+  file_close (opened_file->file);
+  release_lock_f ();
+  /* Remove the opened file from the list */
+  list_remove (&opened_file->file_elem);
+  /* Free opened files */
+  free (opened_file);
+ }
+}
+```
 
 
 
