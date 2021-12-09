@@ -42,7 +42,11 @@
 
 ## 需求分析
 
+## 设计思路
+
 ### **参数传递**
+
+![stack](stack.png)
 
 ```c
 tid_t
@@ -70,7 +74,7 @@ process_execute (const char *file_name)
 
 #### 实现思路图
 
-![image-20211209164541606](C:\Users\黄森辉\AppData\Roaming\Typora\typora-user-images\image-20211209164541606.png)
+![hsh](hsh.jpg)
 
 修改后代码为
 
@@ -211,10 +215,6 @@ start_process (void *file_name_)
 
 对于刚刚新创建的线程，先初始化中断帧，再调用`load`函数（`load`还会调用`setup_stack`，为程序分配内存并创建用户栈）。如果调用成功，分配好了地址空间并创建完成用户栈，则调用`push_argument`把argv数组压入栈顶，否则就退出当前的线程。
 
-## 设计思路
-
-![image-20211207105612405](../AppData/Roaming/Typora/typora-user-images/image-20211207105612405.png)
-
 ### 系统调用
 
 #### 准备工作
@@ -335,10 +335,8 @@ syscall_handler (struct intr_frame *f)
 > 2.用户访问尚未被映射或不属于自己的用户虚存地址空间
 >
 > 3.参数无效导致文件加载失败
->
-> 4.向可执行文件写入
 
-其中1,2,3的情况，我们可以用一个统一的check_ptr函数进行安全检查。
+我们可以用一个统一的check_ptr函数进行安全检查。
 
 > 目前的 pintos 有一个简单的虚存映射机制，大致的流程如下：
 >
@@ -348,11 +346,21 @@ syscall_handler (struct intr_frame *f)
 >
 > 3)在初始化用户进程时，指定一块虚存地址空间给该进程，具体的页表信息保存在该进程对应线程的结构体 struct thread 中，其成员变量名为 pagedir; 
 
-如果访问尚未被映射的地址空间，会造成 page_fault，引发系统崩溃，因此，我们首先检查用户指针是否指向PHYS_BASE，这里直接用is_user_vaddr函数。
+如果访问尚未被映射的地址空间或者错误的地址，会造成 page_fault，引发系统崩溃，因此，我们首先检查用户指针是否指向PHYS_BASE，这里直接用is_user_vaddr函数。
 
-之后我们需要检查，用户是否直接访问错误的地址或者通过 system call机制访问到不该访问的地址，第一种错误引发 page_fault，我们只要判断出它是由用户进程产生的 not_present 错误即可按照错误处理机制解决，但是对于后面一个问题，我们仅通过在 page_fault 函数里加判断是难以解决的。
+用户程序访问内核内存时，系统会调用 page_fault 函数，根据 page_fault 函数中确定产生原因的代码段功能（/* Determine cause. */），我们可以通过加一个 if(user)判断解析出是否是由用户程序造成的错误，如果是，按照确定的错误处理机制，调用 thread_exit()终止进程，返回失败信息­1。
 
-我们注意到用户调用 system call 时，实际上运行的是内核的代码，所以当由于 systemcall 参数不合法产生 page fault 时，Determine Cause 代码段认为它是内核造成的错误，从而引发 kernel panic，系统崩溃。这里使用pagedir_get_page函数进行检查，在pagedir.c中：
+```c
+//IF USER ERROR IS FALSE THEN PUT THE RETURN ADDRESS INTO EIP AND RETURN ERROR INTO EAX
+   if (!user)
+   {
+      f->eip = f->eax;
+      f->eax = -1;
+      return;
+   }
+```
+
+之后我们需要检查，用户是否通过 system call机制访问到不该访问的地址，我们注意到用户调用 system call 时，实际上运行的是内核的代码，所以当由于 systemcall 参数不合法产生 page fault 时，Determine Cause 代码段认为它是内核造成的错误，从而引发 kernel panic，系统崩溃。这里使用pagedir_get_page函数进行检查，在pagedir.c中：
 
 ```c
 /* Looks up the physical address that corresponds to user virtual
@@ -407,7 +415,7 @@ check_ptr2(const void *vaddr)
 }
 ```
 
-这里的part3最开始没有想到，在测试的时候发现exec-bound2和exec-bound3两个测试点无法通过，通过查看测试，发现是文件系统调用时必须保证传递的字符串指针的每一个字节的指针都要有效。这里pintos提供了一个getuser函数，可以检查字节是否有段错误。
+这里的part3最开始没有想到，在测试的时候发现exec-bound2和exec-bound3两个测试点无法通过，通过查看测试，发现是文件系统调用时必须保证传递的字符串指针的每一个字节的指针都要有效。这里pintos提供了一个get_user函数，可以检查字节是否有段错误。
 
 ```c
 /* 在用户虚拟地址 UADDR 读取一个字节。
@@ -423,7 +431,7 @@ get_user (const uint8_t *uaddr)
 }
 ```
 
-为了保证文件访问参数的有效性，我们在syscall_handler中检测第一个参数的合法性。
+为了保证参数的有效性，我们在syscall_handler中统一检测第一个参数的合法性。
 
 ```c
 /* Smplify the code to maintain the code more efficiently */
@@ -486,9 +494,9 @@ sys_write (struct intr_frame* f)
 
 下面是参数获取的实例图。文件相关操作的参数获取和参数检查都大同小异，用write作为展示。
 
-![QQ图片20211209172438](C:\Users\Oliver\Desktop\大三上\操作系统\上机\Pintos\doc\QQ图片20211209172438.jpg)
+![whh](whh.jpg)
 
-
+write实现之后，就可以向终端输出测试结果了，系统调用准备工作到此结束。
 
 #### 系统调用_进程
 
@@ -719,7 +727,7 @@ struct thread_file * find_file_id (int file_id)
 
 ## 重难点讲解
 
-测试样例中提供了这样一个测试 multi­oom,该测试通过用户进程不断地做递归调用，并且不断地进行打开文件操作，并随机地终止某一个线程。该测试考察到了系统平均负载，资源利用率，以及系统的稳定性，具体考察过程如图：
+测试样例中提供了这样一个测试 multi­-oom,该测试通过用户进程不断地做递归调用，并且不断地进行打开文件操作，并随机地终止某一个线程。该测试考察到了系统平均负载，资源利用率，以及系统的稳定性，具体考察过程如图：
 
 ![image-20211208113854841](C:/Users/aurora/AppData/Roaming/Typora/typora-user-images/image-20211208113854841.png)
 
@@ -749,71 +757,25 @@ struct thread_file * find_file_id (int file_id)
 
 ## 用户手册
 
+在userprog文件夹下：
 
+make clean
+
+make check
 
 ## 测试报告
-
-**用户访问系统内存测试点如下：**
-
-tests/userprog/read­bad­ptr 
-
-tests/userprog/bad­write2 
-
-tests/userprog/bad­jump2 
-
-**用户访问尚未被映射或不属于自己的用户虚存地址空间测试点如下：**
-
-tests/userprog/sc­bad­arg 
-
-tests/userprog/sc­bad­sp 
-
-tests/userprog/sc­bad­arg 
-
-tests/userprog/open­bad­ptr 
-
-tests/userprog/read­bad­ptr 
-
-tests/userprog/write­bad­ptr 
-
-tests/userprog/exec­bad­ptr 
-
-tests/userprog/bad­read 
-
-tests/userprog/bad­write 
-
-tests/userprog/bad­read2 
-
-tests/userprog/bad­write2 
-
-tests/userprog/bad­jump 
-
-tests/userprog/bad­jump2 
-
-**文件参数合法性这部分对应的测试点如下：**
-
-tests/userprog/create­empty 
-
-tests/userprog/open­missing 
-
-tests/userprog/open­empty 
-
-tests/userprog/exec­missing 
-
-tests/userprog/wait­bad­pid 
-
-**拒绝写入可执行文件部分对应的测试点如下：**
-
-tests/userprog/rox­simple 
-
-tests/userprog/rox­child 
-
-tests/userprog/rox­multichild
 
 ## 各成员的心得体会
 
 ### Student1
 
-### Student2
+### 陈逸然
+
+  本次实验我主要负责系统调用的准备工作，主要为对函数指针数组初始化工作（syscall_init），初步检查合法性并选择函数（syscall_handler）和用户内存访问安全性保障工作（check_ptr2)和系统调用函数sys_write的完成。其中最麻烦的还是用户内存访问错误检测。
+
+  操作系统是一个特殊的程序，它控制着整个计算机的运行，在用户程序符合要求的情况下，稳定和正确是操作系统运行的基本要求。但是仅仅做到这一点还不够，我们不能对用户的行为做出任何假设，用户很可能会作出不当操作，这些不当操作有可能是用户粗心大意，也可能是有意为之，无论何种情况引发的不当操作造成操作系统的崩溃都有可能造成用户的损失。因此，系统的健壮性是评价一个操作系统优劣的重要指标。我们必须在用户程序产生不当操作时，终止用户进程，而不是任其执行，造成操作系统崩溃。
+
+  我们需要防止用户访问系统内存、需要防止用户访问尚未被映射的错误内存和不属于自己的虚存，错误的情况多种多样，必须对虚拟内存和pintos的机制有一定了解，再根据测试点完成。整体作业还是非常困难的，但是能够感觉到自己对os的理解也有了提高。
 
 ### 吴浩华
 
@@ -976,6 +938,10 @@ write：
 >
 > 求可能造成的最小和最大的页表的检查次数。(e.g. 对 pagedir_get_page()的调用)。如果系统调用只 copy 了 2 bytes 的数据呢？还有没有空间优化？可以优化多少？
 
+对于完整的数据页：最少检查一次，如果第一次检查就能获得页的头指针，那么我们从返回的地址可以看出，不需要任何检查。当它不是连续的，我们必须检查每一个地址来保证用户进程拥有合法的权限，此时最大为4096次。当它是连续时，我们获得一个不是页头指针的虚拟地址，还要检查开始指针和结束指针，查看它们是否映射，所以最大是2次。
+对于2 bytes的数据：最少为1，如上文，如果我们获得了一个大于2字节的地址空间，就不需要再检查了。最大是2，如果它是不连续的或者他是不连续的（返回页表的末尾），我们必须检查另一个字节的位置。
+我们觉得没有什么优化的空间。
+
 > B5: Briefly describe your implementation of the "wait" system call and how it interacts with process termination.
 >
 > B5: 简要描述你"wait"系统调用的实现以及它是如何与进程停止交互的。
@@ -987,6 +953,8 @@ write：
 > B6: Any access to user program memory at a user-specified address can fail due to a bad pointer value. Such accesses must cause the process to be terminated. System calls are fraught with such accesses, e.g. a "write" system call requires reading the system call number from the user stack, then each of the call's three arguments, then an arbitrary amount of user memory, and any of these can fail at any point. This poses a design and error-handling problem: how do you best avoid obscuring the primary function of code in a morass of error-handling? Furthermore, when an error is detected, how do you ensure that all temporarily allocated resources (locks, buffers, etc.) are freed? In a few paragraphs, describe the strategy or strategies you adopted for managing these issues. Give an example.
 >
 > 任何在用户指定的地址上对用户程序的内存的访问可能因为指针错误而失败。此类访问一定导致进程终止。系统调用充满了这样的访问。如一个“写”系统调用需要先从用户栈中读系统调用号，然后每一个调用的 3 个参数，然后是任意数量的用户内存。任何这些都可能造成失败。这构成一个设计错误处理的问题：如何最好地避免混淆主要错误处理的烦恼？此外，当错误被检查到，你如何保证所有的临时开出的资源（锁、缓冲区等）都被释放？用几段话来描述你处理这些问题的策略。
+
+首先，对于每一个传入syscall_handler的f，我们都会首先检查第一个参数是否为空，如果不为空才会接着执行下面的系统调用函数。在写函数中，我们需要获得三个参数，分别是fd，buffer和size，第一个参数fd一定不为空，那么接下来看buffer和size对应的指针是否合法（利用check_ptr2），会检测指针是否为空、是否指向用户内存、是否已映射到进程的页面目录，对应的每个字节是否都有效。一旦发生用户内存访问错误，我们会退出当前进程。只有一切都检查完毕后，我们才会进行资源的分配。
 
 ### SYNCHRONIZATION
 
