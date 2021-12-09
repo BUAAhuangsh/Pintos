@@ -21,7 +21,7 @@
 
 ### 参考资料
 
-1. []()
+1. [临界资源 互斥访问 内核中的up和down函数](https://blog.csdn.net/trochiluses/article/details/9339047)
 2. []()
 
 ## 实验要求
