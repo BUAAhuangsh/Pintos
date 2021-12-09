@@ -484,6 +484,10 @@ sys_write (struct intr_frame* f)
 }
 ```
 
+下面是参数获取的实例图。文件相关操作的参数获取和参数检查都大同小异，用write作为展示。
+
+![QQ图片20211209172438](C:\Users\Oliver\Desktop\大三上\操作系统\上机\Pintos\doc\QQ图片20211209172438.jpg)
+
 
 
 #### 系统调用_进程
@@ -744,6 +748,8 @@ struct thread_file * find_file_id (int file_id)
 ![avatar](sys_wait.png)
 
 ## 用户手册
+
+
 
 ## 测试报告
 
