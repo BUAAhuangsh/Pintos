@@ -668,56 +668,7 @@ void sys_tell(struct intr_frame* f); /* syscall tell */
 void sys_close(struct intr_frame* f); /* syscall close */
 ```
 
-`create`
-
-创建一个文件，首先获取命令行参数，包括了文件名，地址。check保证合法性，然后获取文件的锁，调用`filesys_create`创建文件，最后需要释放锁。
-
-```c
-bool filesys_create (const char *name, off_t initial_size) 
-{
- block_sector_t inode_sector = 0;
- struct dir *dir = dir_open_root ();
- bool success = (dir != NULL
-​         && free_map_allocate (1, &inode_sector)
-​         && inode_create (inode_sector, initial_size)
-​         && dir_add (dir, name, inode_sector));
- if (!success && inode_sector != 0) 
-  free_map_release (inode_sector, 1);
- dir_close (dir);
- return success;
-}
-```
-
-`remove`
-删除一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_remove`删除，释放锁.
-
-```c
-bool filesys_remove (const char *name) 
-{
- struct dir *dir = dir_open_root ();
- bool success = dir != NULL && dir_remove (dir, name);
- dir_close (dir); 
- return success;
-}
-```
-
-`open`
-打开一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_open`打开文件，释放锁。获取当前线程，并且为文件添加一个属于当前线程的文件标识符，放入线程的打开文件的列表中，返回文件的标识符。
-
-```c
-struct file * filesys_open (const char *name)
-{
- struct dir *dir = dir_open_root ();
- struct inode *inode = NULL;
- if (dir != NULL)
-  dir_lookup (dir, name, &inode);
- dir_close (dir);
- return file_open (inode);
-}
-```
-
-`filesize`
-通过`find_file_id`获取文件标识符。调用`file_length`返回以文件标识符fd指代的文件的大小。
+为实现文件操作，首先需要根据文件标识符来查找文件`find_file_id`。这个函数利用了我们在thread.c和thread.h中新定义的几个结构体
 
 ```c
 struct thread_file * find_file_id (int file_id)
@@ -734,36 +685,33 @@ struct thread_file * find_file_id (int file_id)
 }
 ```
 
+`create`
+
+创建一个文件，首先获取命令行参数，包括了文件名，地址。check保证合法性，然后获取文件的锁，调用`filesys_create`创建文件，最后需要释放锁。
+
+`remove`
+删除一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_remove`删除，释放锁.
+
+`read`
+
+对参数进行判断，获取fd输入文件描述符，buffer缓存区，size读取大小。如果参数fd为0，为标准输入，即为从控制台读入数据。调用input_getc()读取数据入缓存区buffer，并返回读取的字节数。
+
+如果参数fd不是0，那么通过`find_file_id`获取文件，如果查询到了文件，获取锁，调用file_read读取文件数据入缓存区buffer，返回读取的字节数。释放锁。若没找到文件，返回-1。
+
+`open`
+打开一个文件，check保证命令行传来的参数合法性，获取锁，调用`filesys_open`打开文件，释放锁。获取当前线程，并且为文件设置一个新的文件标识符fd，fd是线程结构体中的一个属性记录了当前线程的最大文件标识符。最后将文件放入线程的打开文件的列表中，返回文件的标识符。
+
+`filesize`
+通过`find_file_id`获取文件。调用`file_length`返回以文件标识符fd指代的文件的大小。
+
 `seek`
-通过`find_file_id`获取文件标识符，获取文件的锁，根据传入的参数，使用`file_seek`函数把下一个要读入或写入的字节跳转到指定文件的指定位置。
+通过`find_file_id`获取文件，获取文件的锁，根据传入的参数，使用`file_seek`函数把下一个要读入或写入的字节跳转到指定文件的指定位置。
 
 `tell`
-通过`find_file_id`获取文件标识符，获取文件的锁，根据传入的参数，使用`file_tell`函数把下一个要读入或写入的字节的位置返回。
+通过`find_file_id`获取文件，获取文件的锁，根据传入的参数，使用`file_tell`函数把下一个要读入或写入的字节的位置返回。
 
 `close`
-通过`find_file_id`获取文件标识符，获取文件的锁。如果文件打开，调用`file_close`关闭文件，关闭后，把这个文件从线程的文件list中移除并释放资源。
-
-```c
-void sys_close (struct intr_frame* f)
-{
- uint32_t *user_ptr = f->esp;
- check_ptr2 (user_ptr + 1);
- *user_ptr++;
- struct thread_file * opened_file = find_file_id (*user_ptr);
- if (opened_file)
- {
-  acquire_lock_f ();
-  file_close (opened_file->file);
-  release_lock_f ();
-  /* Remove the opened file from the list */
-  list_remove (&opened_file->file_elem);
-  /* Free opened files */
-  free (opened_file);
- }
-}
-```
-
-
+通过`find_file_id`获取文件，获取文件的锁。如果文件打开，调用`file_close`关闭文件，关闭后，把这个文件从线程的文件list中移除并释放资源。
 
 ## 重难点讲解
 
@@ -861,7 +809,9 @@ tests/userprog/rox­multichild
 
 ### Student2
 
-### Student3
+### 吴浩华
+
+这次实验我负责的是系统调用的文件部分。
 
 ### 赵晰莹
 
@@ -1003,6 +953,16 @@ tests/userprog/rox­multichild
 > B3: Describe your code for reading and writing user data from the kernel.
 >
 > B3: 描述你用来从 kernel 中读写文件的代码。
+
+read：
+
+首先对参数进行判断，获取fd输入文件描述符，buffer缓存区，size读取大小。如果参数fd为0，为标准输入，即为从控制台读入数据。调用input_getc()读取数据入缓存区buffer，并返回读取的字节数。
+
+如果参数fd不是0，那么通过`find_file_id`获取文件，如果查询到了文件，获取锁，调用file_read读取文件数据入缓存区buffer，返回读取的字节数。释放锁。若没找到文件，返回-1。
+
+write：
+
+具体实现思路是从用户栈中读取三个参数：fd，buffer和size。fd为写入类型，如果是向屏幕写入，则直接在终端输出，否则找到文件标识符并写入文件。（打开文件表将在打开文件时建立，具体参见sys_open，file_write函数由pintos提供）
 
 > B4: Suppose a system call causes a full page (4,096 bytes) of data to be copied from user space into the kernel. What is the least and the greatest possible number of inspections of the page table (e.g. calls to pagedir_get_page()) that might result? What about for a system call that only copies 2 bytes of data? Is there room for improvement in these numbers, and how much?
 >
