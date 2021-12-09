@@ -754,11 +754,9 @@ tests/userprog/rox­multichild
     }
     ```
 
-
-
 - <thread.h> 
 
-  - 
+  - 建立了一个新的结构体，结构体内使用链表file_elem来储存当前线程拥有的所有文件。fd作为文件的查询标识符。
 
     ```
     struct thread_file {
@@ -768,7 +766,19 @@ tests/userprog/rox­multichild
      };
     ```
 
-  - struct thread中新增
+    ```c
+    struct list_elem 
+     {
+      struct list_elem *prev;   /* Previous list element. */
+      struct list_elem *next;   /* Next list element. */
+     };
+    ```
+
+  - struct thread中新增 
+
+    - list files 保存当前线程所有已经打开的文件。
+    - file_fd是一个只增不减的数，每当打开一个新文件都会加一，并把这个file_fd作为新打开文件的文件标识符fd，以此实现文件和文件标识符的一一对应。
+    - file_owned，保存当前线程最新打开的文件。
 
     ```C
     struct list files;        /* List of opened files */
@@ -776,13 +786,15 @@ tests/userprog/rox­multichild
     struct file * file_owned;     /* The file opened */
     ```
 
-    
-
-
-
 > B2: Describe how file descriptors are associated with open files. Are file descriptors unique within the entire OS or just within a single process?
 >
 > B2: 描述文件描述符是如何与打开文件相联系的。文件描述符是在整个中唯一还是仅在单个进程中唯一？
+
+初始时线程的结构体中file_fd设置为2，0和1留给了标准输入和标准输出。
+
+每当线程打开一个新的文件，将file_fd的值设置为该文件的标识符，然后file_fd+1，为下一次打开文件准备。接着，将文件推入线程的文件链表中，列表里储存了线程已经打开了但是还没有关闭的文件。当我们需要对这些已经打开的文件进行操作时，只需要根据fd来对文件链表进行查找即可。
+
+以此类推，这个线程打开的文件就和文件标识符一一对应了。但是不同线程的文件标识符不唯一。
 
 ### ALGORITHMS
 
@@ -832,10 +844,18 @@ tests/userprog/rox­multichild
 >
 > B9: 为什么你使用这种方式来实现从内核对用户内存的访问？
 
+这种方式比较简洁明了。
+
 > B10: What advantages or disadvantages can you see to your design for file descriptors?
 >
 > B10: 你对文件描述符的设计有什么优劣吗？
 
+优点：结构简单，使用thread结构体里面的一个属性来对文件描述符进行记录，保证了每一个新打开的文件都有与之对应的文件描述符。再通过链表储存，链表查找。
+
+缺点：使用过的文件描述符就被废弃了无法再次利用。例如当前线程只允许打开500个文件，文件描述符最大到500，但是在次之前对一个文件反复打开，关闭使得文件描述符只增不减。到最后虽然当前线程只打开了一两个文件，但是文件描述符却不够用了。
+
 > B11: The default tid_t to pid_t mapping is the identity mapping. If you changed it, what advantages are there to your approach?
 >
 > B11: 默认的 tid_t 到 pid_t 的映射是 identity mapping。如果你进行了更改，那么你的方法有什么优点？
+
+我们没有对它进行修改。我们认为现有的方法以及足够适用。
