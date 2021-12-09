@@ -729,7 +729,7 @@ tests/userprog/rox­multichild
 
   - 
 
-    ```
+    ```c
     struct thread_file {
       int fd;
       struct file* file;
@@ -782,6 +782,8 @@ tests/userprog/rox­multichild
 > B7: The "exec" system call returns -1 if loading the new executable fails, so it cannot return before the new executable has completed loading. How does your code ensure this? How is the load success/failure status passed back to the thread that calls "exec"?
 >
 > B7: 如果新的可执行文件加载失败，"exec"系统调用会返回-1，所以它不能够在该新的可执行文件成功加载之前返回。你的代码是如何保证这一点的？加载成功/失败的状态是如何传递回调用"exec"的线程的？
+
+**详细可查看重难点分析-`sys_exec`；**
 
 我们使用了信号量同步机制的exec流程，start_process后会进行sema_down，直到成功加载后才会sema_up；
 
