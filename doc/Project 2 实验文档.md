@@ -48,6 +48,8 @@
 
 ### 系统调用
 
+#### 准备工作
+
 系统调用是由系统提供的一组完成底层操作的函数集合，由用户程序通过中断调用，系统根据中断向 量表和中断服务号确定函数调用，调用相应的函数完成相应的服务。其主要目的，是在中断的时候根据系统调用号执行函数。大致流程为根据中断帧的指针，通过 esp 找到用户程序调用号和参数，再根据系统调用号，转向系统调用功能函数，并将参数传入，之后执行系统调用具体功能（如创建文件），最后执行完，将返回值写入 eax中。
 
 在syscall.c中：
@@ -225,7 +227,7 @@ check_ptr2(const void *vaddr)
 }
 ```
 
-为了保证文件访问参数的有效性，我们在syscall_handler中检测第一个参数的合法性
+为了保证文件访问参数的有效性，我们在syscall_handler中检测第一个参数的合法性。
 
 ```c
 static void
@@ -243,6 +245,46 @@ syscall_handler (struct intr_frame *f)
   syscalls[type](f);
 }
 ```
+
+**`sys_WRITE`**
+
+`sys_WRITE`可以实现系统向文件或屏幕写数据，具体实现思路是从用户栈中读取三个参数：fd，buffer和size。fd为写入类型，如果是向屏幕写入，则直接在终端输出，否则找到文件标识符并写入文件。（打开文件表将在打开文件时建立，具体参见sys_open，file_write函数由pintos提供）
+
+```c
+void 
+sys_write (struct intr_frame* f)
+{
+  uint32_t *user_ptr = f->esp;
+  check_ptr2 (user_ptr + 7);
+  check_ptr2 (*(user_ptr + 6));
+  *user_ptr++;
+  int temp2 = *user_ptr;
+  const char * buffer = (const char *)*(user_ptr+1);
+  off_t size = *(user_ptr+2);
+  if (temp2 == 1) {
+    /* 写入标准输出 */
+    putbuf(buffer,size);
+    f->eax = size;
+  }
+  else
+  {
+    /*写入到文件 */
+    struct thread_file * thread_file_temp = find_file_id (*user_ptr);
+    if (thread_file_temp)
+    {
+      acquire_lock_f ();
+      f->eax = file_write (thread_file_temp->file, buffer, size);
+      release_lock_f ();
+    } 
+    else
+    {
+      f->eax = 0;
+    }
+  }
+}
+```
+
+
 
 #### 系统调用_进程
 
