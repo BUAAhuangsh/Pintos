@@ -10,7 +10,7 @@
 
 | 姓名   | 学号     | Git 用户名   |
 | ------ | -------- | ------------ |
-| 黄森辉 | 19231153 | BUAAhuangsh  |
+| 黄森辉 |          |              |
 | 陈逸然 | 19231005 | aurora-cccyr |
 | 吴浩华 | 19231023 | async222     |
 | 赵晰莹 | 19231235 | wellmslouis  |
@@ -177,11 +177,68 @@ syscall_handler (struct intr_frame *f)
 >
 > 2)系统初始化时，将指定 PHYS_BASE，高于 PHYS_BASE 的虚存地址空间分配给内核；
 >
-> 3)在初始化用户进程时，指定一块虚存地址空间给该进程，具体的页表信息保存在该进程对应线
->
-> 程的结构体 struct thread 中，其成员变量名为 pagedir; 
+> 3)在初始化用户进程时，指定一块虚存地址空间给该进程，具体的页表信息保存在该进程对应线程的结构体 struct thread 中，其成员变量名为 pagedir; 
 
-如果访问尚未被映射的地址空间，会造成 page_fault，引发系统崩溃，因此，我们首先检查用户指针是否指向PHYS_BASE。
+如果访问尚未被映射的地址空间，会造成 page_fault，引发系统崩溃，因此，我们首先检查用户指针是否指向PHYS_BASE，这里直接用is_user_vaddr函数。
+
+之后我们需要检查，用户是否直接访问错误的地址或者通过 system call机制访问到不该访问的地址，第一种错误引发 page_fault，我们只要判断出它是由用户进程产生的 not_present 错误即可按照错误处理机制解决，但是对于后面一个问题，我们仅通过在 page_fault 函数里加判断是难以解决的。
+
+我们注意到用户调用 system call 时，实际上运行的是内核的代码，所以当由于 systemcall 参数不合法产生 page fault 时，Determine Cause 代码段认为它是内核造成的错误，从而引发 kernel panic，系统崩溃。这里使用pagedir_get_page函数进行检查，在pagedir.c中：
+
+```c
+/* Looks up the physical address that corresponds to user virtual
+   address UADDR in PD.  Returns the kernel virtual address
+   corresponding to that physical address, or a null pointer if
+   UADDR is unmapped. */
+void *
+pagedir_get_page (uint32_t *pd, const void *uaddr) 
+{
+  uint32_t *pte;
+
+  ASSERT (is_user_vaddr (uaddr));
+  
+  pte = lookup_page (pd, uaddr, false);//只使用其判断功能
+  if (pte != NULL && (*pte & PTE_P) != 0)
+    return pte_get_page (*pte) + pg_ofs (uaddr);
+  else
+    return NULL;
+}
+```
+
+lookup_page(uint32_t *pd, const void *vaddr, bool create)这个函数，第一个参数指的是页表索引，第二个参数代表需要访问的虚存地址，函数的功能是判断该虚存地址是否在该页表索引指向的页中，第三个参数是一个执行选项，当 create为 true 时，激活该虚存地址所在页，否则只做判断。
+
+```c
+void * 
+check_ptr2(const void *vaddr)
+{ 
+  //确保指针指向用户地址
+  if (!is_user_vaddr(vaddr))
+  {
+    thread_current()->st_exit = -1;
+    thread_exit ();
+  }
+  //确保页表命中，激活该虚存地址所在页
+  void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
+  if (!ptr)
+  {
+    thread_current()->st_exit = -1;
+    thread_exit ();
+  }
+  //part3
+  uint8_t *check_byteptr = (uint8_t *) vaddr;
+  for (uint8_t i = 0; i < 4; i++) 
+  {
+    if (get_user(check_byteptr + i) == -1)
+    {
+      thread_current()->st_exit = -1;
+      thread_exit ();
+    }
+  }
+  return ptr;//返回物理地址
+}
+```
+
+这里的part3最开始没有想到，在测试的时候发现exec-bound2和exec-bound3两个测试点无法通过，通过查看测试，发现是文件系统调用时必须保证传递的字符串指针的每一个字节的指针都要有效。这里pintos提供了一个getuser函数，可以检查字节是否有段错误。
 
 ```c
 /* 在用户虚拟地址 UADDR 读取一个字节。
@@ -194,36 +251,6 @@ get_user (const uint8_t *uaddr)
   int result;
   asm ("movl $1f, %0; movzbl %1, %0; 1:" : "=&a" (result) : "m" (*uaddr));
   return result;
-}
-
-void * 
-check_ptr2(const void *vaddr)
-{ 
-  //确保指针指向用户地址
-  if (!is_user_vaddr(vaddr))
-  {
-    thread_current()->st_exit = -1;
-    thread_exit ();
-  }
-  //确保页表不为空
-  void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
-  if (!ptr)
-  {
-    thread_current()->st_exit = -1;
-    thread_exit ();
-  }
-  //检查页表中的每一项
-  uint8_t *check_byteptr = (uint8_t *) vaddr;
-  for (uint8_t i = 0; i < 4; i++) 
-  {
-    if (get_user(check_byteptr + i) == -1)
-    {
-      thread_current()->st_exit = -1;
-      thread_exit ();
-    }
-  }
-
-  return ptr;
 }
 ```
 
@@ -254,16 +281,19 @@ syscall_handler (struct intr_frame *f)
 void 
 sys_write (struct intr_frame* f)
 {
+   /*IN :fd(p+1),buffer(p+2),size(p+3)
+ * OUT :eax=count */
   uint32_t *user_ptr = f->esp;
-  check_ptr2 (user_ptr + 7);
-  check_ptr2 (*(user_ptr + 6));
-  *user_ptr++;
-  int temp2 = *user_ptr;
-  const char * buffer = (const char *)*(user_ptr+1);
-  off_t size = *(user_ptr+2);
-  if (temp2 == 1) {
+  check_ptr2 (user_ptr + 7);//检查最后一个参数
+  check_ptr2 (*(user_ptr + 6));//检查buffer
+  int fd = *(user_ptr+1);
+  const char * buffer = (const char *)*(user_ptr+2);
+  off_t size = *(user_ptr+3);
+  /* STDOUT_FILE is 1, defined in lib/stdio.h */
+  if (fd == 1) {
     /* 写入标准输出 */
     putbuf(buffer,size);
+    /* putbuf is in lib/kernel/console */
     f->eax = size;
   }
   else
@@ -729,7 +759,7 @@ tests/userprog/rox­multichild
 
   - 
 
-    ```c
+    ```
     struct thread_file {
       int fd;
       struct file* file;
@@ -782,8 +812,6 @@ tests/userprog/rox­multichild
 > B7: The "exec" system call returns -1 if loading the new executable fails, so it cannot return before the new executable has completed loading. How does your code ensure this? How is the load success/failure status passed back to the thread that calls "exec"?
 >
 > B7: 如果新的可执行文件加载失败，"exec"系统调用会返回-1，所以它不能够在该新的可执行文件成功加载之前返回。你的代码是如何保证这一点的？加载成功/失败的状态是如何传递回调用"exec"的线程的？
-
-**详细可查看重难点分析-`sys_exec`；**
 
 我们使用了信号量同步机制的exec流程，start_process后会进行sema_down，直到成功加载后才会sema_up；
 
