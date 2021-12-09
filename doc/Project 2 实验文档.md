@@ -217,7 +217,7 @@ check_ptr2(const void *vaddr)
     thread_current()->st_exit = -1;
     thread_exit ();
   }
-  //确保页表命中，激活该虚存地址所在页
+  //确保页表命中
   void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
   if (!ptr)
   {
@@ -257,19 +257,20 @@ get_user (const uint8_t *uaddr)
 为了保证文件访问参数的有效性，我们在syscall_handler中检测第一个参数的合法性。
 
 ```c
+/* Smplify the code to maintain the code more efficiently */
 static void
-syscall_handler (struct intr_frame *f)
+syscall_handler (struct intr_frame *f UNUSED)
 {
-  int * p = f->esp;
+  int * a = f->esp;
   //检查第一个参数
-  check_ptr2 (p + 1);
+  check_ptr2 (a + 1);
   //得到系统调用的类型（系统调用号）（int）
-  int type = * (int *)f->esp;
-  if(type <= 0 || type >= max_syscall){
+  int p = * (int *)f->esp;
+  if(p <= 0 || p >= max_syscall){
     thread_current()->st_exit = -1;//将进程的结束状态改为-1
     thread_exit ();//退出进程
   }
-  syscalls[type](f);
+  syscalls[p](f);
 }
 ```
 
