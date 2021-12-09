@@ -73,14 +73,14 @@ check_ptr2(const void *vaddr)
     thread_current()->st_exit = -1;
     thread_exit ();
   }
-  //确保页表不为空
+  //确保页表命中
   void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
   if (!ptr)
   {
     thread_current()->st_exit = -1;
     thread_exit ();
   }
-  //检查页表中的每一项
+  //检查指针0-3字节是否有效
   uint8_t *check_byteptr = (uint8_t *) vaddr;
   for (uint8_t i = 0; i < 4; i++) 
   {
@@ -97,22 +97,24 @@ check_ptr2(const void *vaddr)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
-  int * p = f->esp;
+  int * a = f->esp;
   //检查第一个参数
-  check_ptr2 (p + 1);
+  check_ptr2 (a + 1);
   //得到系统调用的类型（系统调用号）（int）
-  int type = * (int *)f->esp;
-  if(type <= 0 || type >= max_syscall){
+  int p = * (int *)f->esp;
+  if(p <= 0 || p >= max_syscall){
     thread_current()->st_exit = -1;//将进程的结束状态改为-1
     thread_exit ();//退出进程
   }
-  syscalls[type](f);
+  syscalls[p](f);
 }
 
-/* Do system write, Do writing in stdout and write in files */
+/* 写入终端或文件中 */
 void 
 sys_write (struct intr_frame* f)
 {
+  /*IN :fd(p+1),buffer(p+2),size(p+3)
+   * OUT :eax=count */
   uint32_t *user_ptr = f->esp;
   check_ptr2 (user_ptr + 7);
   check_ptr2 (*(user_ptr + 6));
@@ -121,14 +123,15 @@ sys_write (struct intr_frame* f)
   const char * buffer = (const char *)*(user_ptr+1);
   off_t size = *(user_ptr+2);
   if (temp2 == 1) {
-    /* Use putbuf to do testing */
+    /* 写入标准输出 */
     putbuf(buffer,size);
+    /* putbuf is in lib/kernel/console */
     f->eax = size;
   }
   else
   {
-    /* Write to Files */
-    struct thread_file * thread_file_temp = find_file_id (*user_ptr);
+    /*写入到文件 */
+    struct thread_file * thread_file_temp = find_file_id (*user_ptr);//找到文件标识符
     if (thread_file_temp)
     {
       acquire_lock_f ();
@@ -142,13 +145,6 @@ sys_write (struct intr_frame* f)
   }
 }
 
-/* Handle the special situation for thread */
-void 
-exit_special (void)
-{
-  thread_current()->st_exit = -1;
-  thread_exit ();
-}
 //以下是进程方面的系统调用
 
 uint32_t
