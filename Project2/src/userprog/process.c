@@ -112,8 +112,7 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   if (success){
-    /* Our implementation for Task 1:
-      Calculate the number of parameters and the specification of parameters */
+    /* 计算参数个数并且分离 */
     int argc = 0;
     /* The number of parameters can't be more than 50 in the test case */
     int argv[50];
@@ -124,7 +123,7 @@ start_process (void *file_name_)
       argv[argc++] = (int) if_.esp;//argv数组的末尾存放栈顶地址，也就是argv的地址
     }
     push_argument (&if_.esp, argc, argv);
-    /* Record the exec_status of the parent thread's success and sema up parent's semaphore */
+    
     thread_current ()->parent->success = true;
     sema_up (&thread_current ()->parent->sema);
   }
@@ -206,7 +205,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

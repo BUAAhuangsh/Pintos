@@ -42,6 +42,175 @@
 
 ## 需求分析
 
+### **参数传递**
+
+```c
+tid_t
+process_execute (const char *file_name) 
+{
+  char *fn_copy;
+  tid_t tid;
+  /* Make a copy of FILE_NAME.
+     Otherwise there's a race between the caller and load(). */
+  fn_copy = palloc_get_page (0);
+  if (fn_copy == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy, file_name, PGSIZE);
+  /* Create a new thread to execute FILE_NAME. */
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR)
+    palloc_free_page (fn_copy); 
+  return tid;
+}
+```
+
+原来的`process_execute` 不支持传递参数给新的进程，因而现在的目标便是将文件名和参数共同读入并且完成传递。
+
+其中字符串由空格切割分开，数组第0项为命令，其后为命令的参数
+
+#### 实现思路图
+
+![image-20211209164541606](C:\Users\黄森辉\AppData\Roaming\Typora\typora-user-images\image-20211209164541606.png)
+
+修改后代码为
+
+```c
+tid_t
+process_execute (const char *file_name)
+{
+  tid_t tid;
+
+  char *fn_copy = malloc(strlen(file_name)+1);
+  char *fn_copy2 = malloc(strlen(file_name)+1);
+  strlcpy (fn_copy, file_name, strlen(file_name)+1);
+  strlcpy (fn_copy2, file_name, strlen(file_name)+1);
+  /*file_name是全局变量，将file_name拷贝为两份，避免在调用caller和load时发生资源上的冲突*/
+
+  /* Create a new thread to execute FILE_NAME. */
+  char * save_ptr;
+  fn_copy2 = strtok_r (fn_copy2, " ", &save_ptr);//strtok_r线程安全，保存了上次切割留下来的saveptr
+  tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
+  /* 创建以file_name为名字的新线程，新的子线程执行start_process函数.fn_copy保存在kernel_thread_frame
+  这个结构体的辅助数据aux里  */
+  free (fn_copy2);//释放fn_copy2
+
+  if (tid == TID_ERROR){
+    free (fn_copy);
+    return tid;
+  }
+
+  /* Sema down the parent process, waiting for child */
+  sema_down(&thread_current()->sema);//降低父进程信号量，等待子进程结束
+  if (!thread_current()->success) 
+    return TID_ERROR;
+
+  return tid;
+}
+```
+
+
+
+接下来设计新的压栈函数`push_argument`
+
+```c
+/*传参数也就是压栈
+  必须在用户线程被创建以及初始化之后
+  在main被执行之前完成对应参数的传递*/
+void
+push_argument (void **esp, int argc, int argv[]){
+  *esp = (int)*esp & 0xfffffffc;
+  *esp -= 4;
+  *(int *) *esp = 0;
+  /*按照argc的大小，将argv压入栈*/
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    *esp -= 4;//入栈后栈指针减4
+    *(int *) *esp = argv[i];
+  }
+  *esp -= 4;
+  *(int *) *esp = (int) *esp + 4;
+  *esp -= 4;
+  *(int *) *esp = argc;//传入argc
+  *esp -= 4;
+  *(int *) *esp = 0;
+}
+```
+
+`push_argument`函数完成了根据argc的大小将argv数组压入栈的操作。在`start_process`函数中被调用。压入栈顶的过程中，依次存放入参数argv数组（靠参数分离得到）、argv的地址和argc的地址。
+
+
+
+然后修改`start_process`
+
+```c
+/* A thread function that loads a user process and starts it
+   running. */
+static void
+start_process (void *file_name_)
+{
+  char *file_name = file_name_;
+  struct intr_frame if_;
+  bool success;
+
+  char *fn_copy=malloc(strlen(file_name)+1);
+  /*file_name的拷贝*/
+  strlcpy(fn_copy,file_name,strlen(file_name)+1);
+
+  /* Initialize interrupt frame and load executable. */
+  /*初始化中断帧*/
+  memset (&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+
+  char *token, *save_ptr;
+  file_name = strtok_r (file_name, " ", &save_ptr);
+  /*调用load函数，判断是否成功load*/
+  success = load (file_name, &if_.eip, &if_.esp);
+
+    
+ 
+    
+  if (success){
+    /* 计算参数个数并且分离 */
+    int argc = 0;
+    int argv[50];
+    /*token也就是命令行输入的参数分离后得到的包含了argv的数组*/
+    for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if_.esp -= (strlen(token)+1);
+      memcpy (if_.esp, token, strlen(token)+1);//栈指针退后token的长度，空出token长度的空间用来存放token
+      argv[argc++] = (int) if_.esp;//argv数组的末尾存放栈顶地址，也就是argv的地址
+    }
+    push_argument (&if_.esp, argc, argv);
+    /*将当前线程父线程的success设置为true并且提升其信号量*/
+    thread_current ()->parent->success = true;
+    sema_up (&thread_current ()->parent->sema);
+  }
+
+    
+    
+
+  /* 错误后退出*/
+  else{
+    thread_current ()->parent->success = false;
+    sema_up (&thread_current ()->parent->sema);
+    thread_exit ();
+  }
+
+
+  /* Start the user process by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+  NOT_REACHED ();
+}
+```
+
+对于刚刚新创建的线程，先初始化中断帧，再调用`load`函数（`load`还会调用`setup_stack`，为程序分配内存并创建用户栈）。如果调用成功，分配好了地址空间并创建完成用户栈，则调用`push_argument`把argv数组压入栈顶，否则就退出当前的线程。
+
 ## 设计思路
 
 ![image-20211207105612405](../AppData/Roaming/Typora/typora-user-images/image-20211207105612405.png)
@@ -678,22 +847,55 @@ tests/userprog/rox­multichild
 ### DATA STRUCTURES
 
 > A1: Copy here the declaration of each new or changed `struct` or `struct` member, global or static variable, `typedef`, or enumeration. Identify the purpose of each in 25 words or less.
+>
+> in `thread.h`
+>
+> 新增
+>
+> ```c
+>  	struct list childs;                 
+>     struct child * thread_child;        
+>     int st_exit;                        
+>     struct semaphore sema;              
+>     bool success;                       
+>     struct thread* parent;              
+> ```
+>
+> in `process.c`
+>
+> 修改`process_execute`
+>
+> 修改`start_process`
+>
+> 
 
 ### ALGORITHMS
 
 > A2: Briefly describe how you implemented argument parsing. How do you arrange for the elements of argv[] to be in the right order? How do you avoid overflowing the stack page?
 >
 > A2: 简要描述你是怎么实现 Argument parsing 的。你是如何安排 argv[]中的 elements，使其在正确的顺序的？你是如何避免 stack page 的溢出的？
+>
+> `process_execute()`提供的`file_name`包括了命令和。把它们分成两部分， 为程序名和参数串。然后，创建新的thread，其名字为分离出的第一个token。
+>
+> 当设置stack的时候，优先将参数放到栈顶，并且记录参数对应的地址。随后将每个token的地址依次压入栈中。其中包括`word align`、`argv[argc]`、`argv[]`、`argc`、`return addr`等。
 
 ### RATIONALE
 
 > A3: Why does Pintos implement strtok_r() but not strtok()?
 >
 > A3: 为什么 Pintos 中实现 strtok_r()而不是 strtok()？
+>
+> `strtok_r()`比`strtok()`多了`save_ptr`，是它的线程安全版本。从strtok_r输出的缓冲是在内部分配的，在程序结束的时候，库会进行释放操作。
 
 > A4: In Pintos, the kernel separates commands into a executable name and arguments. In Unix-like systems, the shell does this separation. Identify at least two advantages of the Unix approach.
 >
 > A4: 在 Pintos 中，kernel 将命令分成了可执行文件的 name 以及参数。在 Unix-like 的系统中，shell 完成这部分的分隔。列举至少 2 种 Unix 这样做的好处。
+>
+> 1.缩短内核内部运行的时间。
+>
+> 2.把命令传递给下一部分程序之前，检查参数是否超过限制以避免kernel fail。
+>
+> 3.在讲命令传递给下一部分程序之前，检查参数是否超过限制以避免kernel fail。
 
 ## QUESTION 2: SYSTEM CALLS
 
