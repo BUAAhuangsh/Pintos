@@ -745,10 +745,6 @@ struct thread_file * find_file_id (int file_id)
 
 系统平均负载能力反映在同时处于就绪状态的线程数，在本测试中，对应的就是递归调用的层数，层数越多，并发能力越强，而就绪程序越多，对于系统的压力就越大。我们需要测试出 pintos 操作系统的并发能力上限，对用户创建线程做出一定限制，以保证 pintos 系统正常运行。
 
-### `sys_exec`流程图
-
-![avatar](sys_exec.png)
-
 ### `sys_wait`流程图
 
 ![avatar](sys_wait.png)
@@ -879,28 +875,37 @@ make check
 
   - 建立了一个新的结构体，结构体内使用链表file_elem来储存当前线程拥有的所有文件。fd作为文件的查询标识符。
 
-    ```
+    ```c
     struct thread_file {
       int fd;
       struct file* file;
       struct list_elem file_elem;
      };
-    ```
-
-    ```c
     struct list_elem 
      {
       struct list_elem *prev;   /* Previous list element. */
       struct list_elem *next;   /* Next list element. */
      };
     ```
-
+  
+    ```c
+    //子进程结构体，详见系统调用_进程-sys_wait()
+    struct child
+      {
+        tid_t tid;
+        bool isrun;//运行状态
+        struct list_elem child_elem;//子进程列表
+        struct semaphore sema;//控制父进程等待的信号量
+        int store_exit;//退出状态
+      };
+    ```
+  
   - struct thread中新增 
-
+  
     - list files 保存当前线程所有已经打开的文件。
     - file_fd是一个只增不减的数，每当打开一个新文件都会加一，并把这个file_fd作为新打开文件的文件标识符fd，以此实现文件和文件标识符的一一对应。
     - file_owned，保存当前线程最新打开的文件。
-
+  
     ```C
     struct list files;        /* List of opened files */
     int file_fd;             /* File's descriptor */
