@@ -10,7 +10,7 @@
 
 | 姓名   | 学号     | Git 用户名   |
 | ------ | -------- | ------------ |
-| 黄森辉 | 19231153 | BUAAhuangsh  |
+| 黄森辉 |          |              |
 | 陈逸然 | 19231005 | aurora-cccyr |
 | 吴浩华 | 19231023 | async222     |
 | 赵晰莹 | 19231235 | wellmslouis  |
@@ -177,11 +177,68 @@ syscall_handler (struct intr_frame *f)
 >
 > 2)系统初始化时，将指定 PHYS_BASE，高于 PHYS_BASE 的虚存地址空间分配给内核；
 >
-> 3)在初始化用户进程时，指定一块虚存地址空间给该进程，具体的页表信息保存在该进程对应线
->
-> 程的结构体 struct thread 中，其成员变量名为 pagedir; 
+> 3)在初始化用户进程时，指定一块虚存地址空间给该进程，具体的页表信息保存在该进程对应线程的结构体 struct thread 中，其成员变量名为 pagedir; 
 
-如果访问尚未被映射的地址空间，会造成 page_fault，引发系统崩溃，因此，我们首先检查用户指针是否指向PHYS_BASE。
+如果访问尚未被映射的地址空间，会造成 page_fault，引发系统崩溃，因此，我们首先检查用户指针是否指向PHYS_BASE，这里直接用is_user_vaddr函数。
+
+之后我们需要检查，用户是否直接访问错误的地址或者通过 system call机制访问到不该访问的地址，第一种错误引发 page_fault，我们只要判断出它是由用户进程产生的 not_present 错误即可按照错误处理机制解决，但是对于后面一个问题，我们仅通过在 page_fault 函数里加判断是难以解决的。
+
+我们注意到用户调用 system call 时，实际上运行的是内核的代码，所以当由于 systemcall 参数不合法产生 page fault 时，Determine Cause 代码段认为它是内核造成的错误，从而引发 kernel panic，系统崩溃。这里使用pagedir_get_page函数进行检查，在pagedir.c中：
+
+```c
+/* Looks up the physical address that corresponds to user virtual
+   address UADDR in PD.  Returns the kernel virtual address
+   corresponding to that physical address, or a null pointer if
+   UADDR is unmapped. */
+void *
+pagedir_get_page (uint32_t *pd, const void *uaddr) 
+{
+  uint32_t *pte;
+
+  ASSERT (is_user_vaddr (uaddr));
+  
+  pte = lookup_page (pd, uaddr, false);//只使用其判断功能
+  if (pte != NULL && (*pte & PTE_P) != 0)
+    return pte_get_page (*pte) + pg_ofs (uaddr);
+  else
+    return NULL;
+}
+```
+
+lookup_page(uint32_t *pd, const void *vaddr, bool create)这个函数，第一个参数指的是页表索引，第二个参数代表需要访问的虚存地址，函数的功能是判断该虚存地址是否在该页表索引指向的页中，第三个参数是一个执行选项，当 create为 true 时，激活该虚存地址所在页，否则只做判断。
+
+```c
+void * 
+check_ptr2(const void *vaddr)
+{ 
+  //确保指针指向用户地址
+  if (!is_user_vaddr(vaddr))
+  {
+    thread_current()->st_exit = -1;
+    thread_exit ();
+  }
+  //确保页表命中
+  void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
+  if (!ptr)
+  {
+    thread_current()->st_exit = -1;
+    thread_exit ();
+  }
+  //part3
+  uint8_t *check_byteptr = (uint8_t *) vaddr;
+  for (uint8_t i = 0; i < 4; i++) 
+  {
+    if (get_user(check_byteptr + i) == -1)
+    {
+      thread_current()->st_exit = -1;
+      thread_exit ();
+    }
+  }
+  return ptr;//返回物理地址
+}
+```
+
+这里的part3最开始没有想到，在测试的时候发现exec-bound2和exec-bound3两个测试点无法通过，通过查看测试，发现是文件系统调用时必须保证传递的字符串指针的每一个字节的指针都要有效。这里pintos提供了一个getuser函数，可以检查字节是否有段错误。
 
 ```c
 /* 在用户虚拟地址 UADDR 读取一个字节。
@@ -195,54 +252,25 @@ get_user (const uint8_t *uaddr)
   asm ("movl $1f, %0; movzbl %1, %0; 1:" : "=&a" (result) : "m" (*uaddr));
   return result;
 }
-
-void * 
-check_ptr2(const void *vaddr)
-{ 
-  //确保指针指向用户地址
-  if (!is_user_vaddr(vaddr))
-  {
-    thread_current()->st_exit = -1;
-    thread_exit ();
-  }
-  //确保页表不为空
-  void *ptr = pagedir_get_page (thread_current()->pagedir, vaddr);
-  if (!ptr)
-  {
-    thread_current()->st_exit = -1;
-    thread_exit ();
-  }
-  //检查页表中的每一项
-  uint8_t *check_byteptr = (uint8_t *) vaddr;
-  for (uint8_t i = 0; i < 4; i++) 
-  {
-    if (get_user(check_byteptr + i) == -1)
-    {
-      thread_current()->st_exit = -1;
-      thread_exit ();
-    }
-  }
-
-  return ptr;
-}
 ```
 
 为了保证文件访问参数的有效性，我们在syscall_handler中检测第一个参数的合法性。
 
 ```c
+/* Smplify the code to maintain the code more efficiently */
 static void
-syscall_handler (struct intr_frame *f)
+syscall_handler (struct intr_frame *f UNUSED)
 {
-  int * p = f->esp;
+  int * a = f->esp;
   //检查第一个参数
-  check_ptr2 (p + 1);
+  check_ptr2 (a + 1);
   //得到系统调用的类型（系统调用号）（int）
-  int type = * (int *)f->esp;
-  if(type <= 0 || type >= max_syscall){
+  int p = * (int *)f->esp;
+  if(p <= 0 || p >= max_syscall){
     thread_current()->st_exit = -1;//将进程的结束状态改为-1
     thread_exit ();//退出进程
   }
-  syscalls[type](f);
+  syscalls[p](f);
 }
 ```
 
@@ -254,16 +282,19 @@ syscall_handler (struct intr_frame *f)
 void 
 sys_write (struct intr_frame* f)
 {
+   /*IN :fd(p+1),buffer(p+2),size(p+3)
+ * OUT :eax=count */
   uint32_t *user_ptr = f->esp;
-  check_ptr2 (user_ptr + 7);
-  check_ptr2 (*(user_ptr + 6));
-  *user_ptr++;
-  int temp2 = *user_ptr;
-  const char * buffer = (const char *)*(user_ptr+1);
-  off_t size = *(user_ptr+2);
-  if (temp2 == 1) {
+  check_ptr2 (user_ptr + 7);//检查最后一个参数
+  check_ptr2 (*(user_ptr + 6));//检查buffer
+  int fd = *(user_ptr+1);
+  const char * buffer = (const char *)*(user_ptr+2);
+  off_t size = *(user_ptr+3);
+  /* STDOUT_FILE is 1, defined in lib/stdio.h */
+  if (fd == 1) {
     /* 写入标准输出 */
     putbuf(buffer,size);
+    /* putbuf is in lib/kernel/console */
     f->eax = size;
   }
   else
@@ -563,6 +594,8 @@ void sys_close (struct intr_frame* f)
 }
 ```
 
+
+
 ## 重难点讲解
 
 测试样例中提供了这样一个测试 multi­oom,该测试通过用户进程不断地做递归调用，并且不断地进行打开文件操作，并随机地终止某一个线程。该测试考察到了系统平均负载，资源利用率，以及系统的稳定性，具体考察过程如图：
@@ -721,9 +754,11 @@ tests/userprog/rox­multichild
     }
     ```
 
+
+
 - <thread.h> 
 
-  - 建立了一个新的结构体，结构体内使用链表file_elem来储存当前线程拥有的所有文件。fd作为文件的查询标识符。
+  - 
 
     ```
     struct thread_file {
@@ -733,19 +768,7 @@ tests/userprog/rox­multichild
      };
     ```
 
-    ```c
-    struct list_elem 
-     {
-      struct list_elem *prev;   /* Previous list element. */
-      struct list_elem *next;   /* Next list element. */
-     };
-    ```
-
-  - struct thread中新增 
-
-    - list files 保存当前线程所有已经打开的文件。
-    - file_fd是一个只增不减的数，每当打开一个新文件都会加一，并把这个file_fd作为新打开文件的文件标识符fd，以此实现文件和文件标识符的一一对应。
-    - file_owned，保存当前线程最新打开的文件。
+  - struct thread中新增
 
     ```C
     struct list files;        /* List of opened files */
@@ -753,27 +776,19 @@ tests/userprog/rox­multichild
     struct file * file_owned;     /* The file opened */
     ```
 
+    
+
+
+
 > B2: Describe how file descriptors are associated with open files. Are file descriptors unique within the entire OS or just within a single process?
 >
 > B2: 描述文件描述符是如何与打开文件相联系的。文件描述符是在整个中唯一还是仅在单个进程中唯一？
-
-文件描述符fd，在单个进程中唯一。
-
-初始时线程的结构体中file_fd设置为2，0和1留给了标准输入和标准输出。
-
-每当线程打开一个新的文件，将file_fd的值设置为该文件的标识符，然后file_fd+1，为下一次打开文件准备。接着，将文件推入线程的文件链表中，列表里储存了线程已经打开了但是还没有关闭的文件。当我们需要对这些已经打开的文件进行操作时，只需要根据fd来对文件链表进行查找即可。
-
-以此类推，这个线程打开的文件就和文件标识符一一对应了。但是不同线程的文件标识符不唯一。
 
 ### ALGORITHMS
 
 > B3: Describe your code for reading and writing user data from the kernel.
 >
 > B3: 描述你用来从 kernel 中读写文件的代码。
-
-write
-
-
 
 > B4: Suppose a system call causes a full page (4,096 bytes) of data to be copied from user space into the kernel. What is the least and the greatest possible number of inspections of the page table (e.g. calls to pagedir_get_page()) that might result? What about for a system call that only copies 2 bytes of data? Is there room for improvement in these numbers, and how much?
 >
@@ -799,8 +814,6 @@ write
 >
 > B7: 如果新的可执行文件加载失败，"exec"系统调用会返回-1，所以它不能够在该新的可执行文件成功加载之前返回。你的代码是如何保证这一点的？加载成功/失败的状态是如何传递回调用"exec"的线程的？
 
-**详细可查看重难点分析-`sys_exec`；**
-
 我们使用了信号量同步机制的exec流程，start_process后会进行sema_down，直到成功加载后才会sema_up；
 
 通过返回确定的tid（>0成功，-1失败）传递给父进程。
@@ -819,18 +832,10 @@ write
 >
 > B9: 为什么你使用这种方式来实现从内核对用户内存的访问？
 
-这种方式比较简洁明了。
-
 > B10: What advantages or disadvantages can you see to your design for file descriptors?
 >
 > B10: 你对文件描述符的设计有什么优劣吗？
 
-优点：结构简单，使用thread结构体里面的一个属性来对文件描述符进行记录，保证了每一个新打开的文件都有与之对应的文件描述符。再通过链表储存，链表查找。
-
-缺点：使用过的文件描述符就被废弃了无法再次利用。例如当前线程只允许打开500个文件，文件描述符最大到500，但是在次之前对一个文件反复打开，关闭使得文件描述符只增不减。到最后虽然当前线程只打开了一两个文件，但是文件描述符却不够用了。
-
 > B11: The default tid_t to pid_t mapping is the identity mapping. If you changed it, what advantages are there to your approach?
 >
 > B11: 默认的 tid_t 到 pid_t 的映射是 identity mapping。如果你进行了更改，那么你的方法有什么优点？
-
-我们没有对它进行修改。我们认为现有的方法以及足够适用。
