@@ -593,8 +593,6 @@ void sys_close (struct intr_frame* f)
 }
 ```
 
-
-
 ## 重难点讲解
 
 测试样例中提供了这样一个测试 multi­oom,该测试通过用户进程不断地做递归调用，并且不断地进行打开文件操作，并随机地终止某一个线程。该测试考察到了系统平均负载，资源利用率，以及系统的稳定性，具体考察过程如图：
@@ -753,11 +751,9 @@ tests/userprog/rox­multichild
     }
     ```
 
-
-
 - <thread.h> 
 
-  - 
+  - 建立了一个新的结构体，结构体内使用链表file_elem来储存当前线程拥有的所有文件。fd作为文件的查询标识符。
 
     ```
     struct thread_file {
@@ -767,7 +763,19 @@ tests/userprog/rox­multichild
      };
     ```
 
-  - struct thread中新增
+    ```c
+    struct list_elem 
+     {
+      struct list_elem *prev;   /* Previous list element. */
+      struct list_elem *next;   /* Next list element. */
+     };
+    ```
+
+  - struct thread中新增 
+
+    - list files 保存当前线程所有已经打开的文件。
+    - file_fd是一个只增不减的数，每当打开一个新文件都会加一，并把这个file_fd作为新打开文件的文件标识符fd，以此实现文件和文件标识符的一一对应。
+    - file_owned，保存当前线程最新打开的文件。
 
     ```C
     struct list files;        /* List of opened files */
@@ -775,13 +783,11 @@ tests/userprog/rox­multichild
     struct file * file_owned;     /* The file opened */
     ```
 
-    
-
-
-
 > B2: Describe how file descriptors are associated with open files. Are file descriptors unique within the entire OS or just within a single process?
 >
 > B2: 描述文件描述符是如何与打开文件相联系的。文件描述符是在整个中唯一还是仅在单个进程中唯一？
+
+文件描述符fd，在单个进程中唯一。
 
 ### ALGORITHMS
 
@@ -831,10 +837,20 @@ tests/userprog/rox­multichild
 >
 > B9: 为什么你使用这种方式来实现从内核对用户内存的访问？
 
+
+
+
+
 > B10: What advantages or disadvantages can you see to your design for file descriptors?
 >
 > B10: 你对文件描述符的设计有什么优劣吗？
 
+
+
+
+
 > B11: The default tid_t to pid_t mapping is the identity mapping. If you changed it, what advantages are there to your approach?
 >
 > B11: 默认的 tid_t 到 pid_t 的映射是 identity mapping。如果你进行了更改，那么你的方法有什么优点？
+
+我们没有对它进行修改。我们认为现有的方法以及足够适用。
