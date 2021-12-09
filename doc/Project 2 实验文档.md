@@ -819,7 +819,7 @@ write
 >
 > B9: 为什么你使用这种方式来实现从内核对用户内存的访问？
 
-这种方式比较简洁明了。
+这种方式比较简洁明了
 
 > B10: What advantages or disadvantages can you see to your design for file descriptors?
 >
